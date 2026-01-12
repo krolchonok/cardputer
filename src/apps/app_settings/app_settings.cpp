@@ -14,7 +14,7 @@ using namespace mooncake;
 
 AppSettings::AppSettings()
 {
-    setAppInfo().name = "Settings";
+    setAppInfo().name = "Sound";
 }
 
 AppSettings::~AppSettings()
@@ -52,6 +52,9 @@ void AppSettings::onClose()
         GetHAL().keyboard.onKeyEventRaw.disconnect(_key_event_slot_id);
         _key_event_slot_id = -1;
     }
+
+    GetHAL().canvas.fillScreen(THEME_COLOR_BG);
+    GetHAL().pushCanvas();
 }
 
 void AppSettings::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
@@ -126,7 +129,7 @@ void AppSettings::render_interface()
     GetHAL().canvas.setTextSize(1);
     GetHAL().canvas.setCursor(0, 0);
     GetHAL().canvas.setTextColor(TFT_ORANGE, THEME_COLOR_BG);
-    GetHAL().canvas.println("Settings");
+    GetHAL().canvas.println("Sound");
 
     const int row_h   = FONT_HEIGHT + 2;
     const int start_y = 18;

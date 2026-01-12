@@ -27,8 +27,9 @@ void LauncherMenu::init(int launcherAppId)
     for (auto& app_raw : installed_apps) {
         auto app = static_cast<AppAbility*>(app_raw);
 
-        // Skip launcher
-        if (app->getId() == launcherAppId) {
+        // Skip launcher and apps that live under Settings
+        if (app->getId() == launcherAppId || app->getAppInfo().name == "SetWiFi" ||
+            app->getAppInfo().name == "Sound") {
             continue;
         }
 

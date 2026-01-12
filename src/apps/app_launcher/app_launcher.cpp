@@ -34,10 +34,6 @@ void Launcher::onRunning()
 
     // If app is opened and running
     if (_data.running_app_id >= 0) {
-        if (GetHAL().homeButton.wasClicked()) {
-            GetMooncake().closeApp(_data.running_app_id);
-        }
-
         // If running app is closed
         if (GetMooncake().getAppCurrentState(_data.running_app_id) == AppAbility::StateSleeping) {
             _data.running_app_id = -1;

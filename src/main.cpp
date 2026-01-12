@@ -36,6 +36,7 @@ void setup()
     GetMooncake().installApp(std::make_unique<AppChat>());
     GetMooncake().installApp(std::make_unique<AppRemote>());
     GetMooncake().installApp(std::make_unique<AppSetWiFi>());
+    GetMooncake().installApp(std::make_unique<AppSettingsMenu>());
     GetMooncake().installApp(std::make_unique<AppSettings>());
     GetMooncake().installApp(std::make_unique<AppClock>());
     GetMooncake().installApp(std::make_unique<AppKeyboard>());
