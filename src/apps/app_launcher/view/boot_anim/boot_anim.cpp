@@ -13,6 +13,7 @@
 #include <mooncake_log.h>
 #include <hal.h>
 #include <esp_system.h>
+#include <algorithm>
 
 // #define NO_BOOT_PLAY
 
@@ -41,6 +42,14 @@ static void fancy_logo_fade_in()
     GetHAL().display.setBrightness(255);
 }
 
+static void apply_saved_brightness()
+{
+    int32_t bright = GetHAL().getSettings().GetInt("disp_bright", 10);
+    bright         = std::clamp<int32_t>(bright, 0, 10);
+    uint8_t hw_brightness = static_cast<uint8_t>((bright * 255 + 5) / 10);
+    GetHAL().display.setBrightness(hw_brightness);
+}
+
 void Launcher::boot_anim()
 {
     mclog::tagInfo(getAppInfo().name, "start boot anim");
@@ -50,7 +59,7 @@ void Launcher::boot_anim()
     // If software restart
     if (esp_reset_reason() != ESP_RST_POWERON) {
         mclog::tagInfo(getAppInfo().name, "not power on reset, skip boot anim");
-        GetHAL().display.setBrightness(255);
+        apply_saved_brightness();
         return;
     }
 
@@ -101,4 +110,5 @@ void Launcher::boot_anim()
     }
 
     GetHAL().keyboard.clearKeyEvent();
+    apply_saved_brightness();
 }
