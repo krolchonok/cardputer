@@ -5,9 +5,12 @@
  */
 #include "app_settings_menu.h"
 #include <apps/utils/audio/audio.h>
+#include <apps/utils/common.h>
 #include <apps/utils/theme.h>
 #include <mooncake_log.h>
 #include <smooth_ui_toolkit.h>
+#include "app_set_wifi/assets/set_wifi_big.h"
+#include "app_set_wifi/assets/set_wifi_small.h"
 
 using namespace mooncake;
 using namespace smooth_ui_toolkit;
@@ -118,10 +121,12 @@ private:
 AppSettingsMenu::AppSettingsMenu()
 {
     setAppInfo().name = "Settings";
+    setAppInfo().userData = new AppIcon_t(image_data_set_wifi_big, image_data_set_wifi_small);
 }
 
 AppSettingsMenu::~AppSettingsMenu()
 {
+    delete static_cast<AppIcon_t*>(getAppInfo().userData);
 }
 
 void AppSettingsMenu::onOpen()
