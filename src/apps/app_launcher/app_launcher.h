@@ -57,6 +57,7 @@ private:
 
         // Keyboard bar
         KeyboardBarState_t keybaord_state;
+        bool keyboard_bar_visible = true;
 
         char string_buffer[100];
 

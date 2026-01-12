@@ -57,6 +57,10 @@ void setup()
         uint8_t hw_brightness = static_cast<uint8_t>((bright * 255 + 5) / 10);
         GetHAL().display.setBrightness(hw_brightness);
     }
+    {
+        bool kb_ind = GetHAL().getSettings().GetInt("disp_kb_ind", 1) != 0;
+        GetHAL().setKeyboardBarVisible(kb_ind);
+    }
     g_run_update = true;
 }
 

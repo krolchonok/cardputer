@@ -40,15 +40,20 @@ public:
 
     inline void pushCanvasSystemBar()
     {
-        canvasSystemBar.pushSprite(canvasKeyboardBar.width(), 0);
+        int x = _keyboard_bar_visible ? _keyboard_bar_width : 0;
+        canvasSystemBar.pushSprite(x, 0);
     }
     inline void pushCanvasKeyboardBar()
     {
+        if (!_keyboard_bar_visible) {
+            return;
+        }
         canvasKeyboardBar.pushSprite(0, 0);
     }
     inline void pushCanvas()
     {
-        canvas.pushSprite(canvasKeyboardBar.width(), canvasSystemBar.height());
+        int x = _keyboard_bar_visible ? _keyboard_bar_width : 0;
+        canvas.pushSprite(x, _system_bar_height);
     }
 
     /* ---------------------------------- Audio --------------------------------- */
@@ -102,6 +107,11 @@ public:
     {
         return *_settings;
     }
+    void setKeyboardBarVisible(bool visible);
+    bool isKeyboardBarVisible() const
+    {
+        return _keyboard_bar_visible;
+    }
 
     /* ----------------------------------- IMU ---------------------------------- */
     m5::IMU_Class& imu = M5.Imu;
@@ -125,6 +135,9 @@ public:
     CapLoRa868 capLora868;
 
 private:
+    static constexpr int k_canvas_width_with_bar = 204;
+    static constexpr int k_canvas_height = 109;
+
     Settings* _settings             = nullptr;
     bool _is_wifi_inited            = false;
     bool _is_wifi_connected         = false;
@@ -135,9 +148,14 @@ private:
     bool _is_sd_card_mounted        = false;
     int _ble_keyboard_event_slot_id = -1;
     int _usb_keyboard_event_slot_id = -1;
+    bool _keyboard_bar_visible      = true;
+    int _keyboard_bar_width         = 0;
+    int _system_bar_height          = 0;
+
     std::unique_ptr<CapLoRa868> _cap_lora868;
 
     void display_init();
+    void applyDisplayLayout();
     void i2c_scan();
     void keyboard_init();
     void start_sntp();

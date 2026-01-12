@@ -91,9 +91,46 @@ void Hal::display_init()
 {
     mclog::tagInfo(_tag, "display init");
 
-    canvas.createSprite(204, 109);
-    canvasKeyboardBar.createSprite(display.width() - canvas.width(), display.height());
-    canvasSystemBar.createSprite(canvas.width(), display.height() - canvas.height());
+    _keyboard_bar_visible = true;
+    applyDisplayLayout();
+}
+
+void Hal::applyDisplayLayout()
+{
+    int canvas_width = _keyboard_bar_visible ? k_canvas_width_with_bar : display.width();
+    int canvas_height = k_canvas_height;
+    int kb_width = display.width() - canvas_width;
+    if (!_keyboard_bar_visible) {
+        kb_width = 0;
+    }
+    if (kb_width < 0) {
+        kb_width = 0;
+    }
+
+    _keyboard_bar_width = kb_width;
+    _system_bar_height  = display.height() - canvas_height;
+
+    canvas.deleteSprite();
+    canvasKeyboardBar.deleteSprite();
+    canvasSystemBar.deleteSprite();
+
+    canvas.createSprite(canvas_width, canvas_height);
+    if (kb_width > 0) {
+        canvasKeyboardBar.createSprite(kb_width, display.height());
+    } else {
+        canvasKeyboardBar.createSprite(1, display.height());
+    }
+    canvasSystemBar.createSprite(canvas_width, _system_bar_height);
+}
+
+void Hal::setKeyboardBarVisible(bool visible)
+{
+    if (visible == _keyboard_bar_visible) {
+        return;
+    }
+
+    _keyboard_bar_visible = visible;
+    applyDisplayLayout();
 }
 
 /* -------------------------------------------------------------------------- */

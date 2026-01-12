@@ -24,8 +24,10 @@ void AppDisplay::onOpen()
 {
     mclog::tagInfo(getAppInfo().name, "on open");
 
+    _selected_index = 0;
     int32_t saved = GetHAL().getSettings().GetInt(k_setting_brightness, 10);
     _brightness   = static_cast<uint8_t>(std::clamp<int32_t>(saved, 0, 10));
+    _indicators_enabled = GetHAL().getSettings().GetInt(k_setting_indicators, 1) != 0;
     uint8_t hw_brightness = static_cast<uint8_t>((_brightness * 255 + 5) / 10);
     GetHAL().display.setBrightness(hw_brightness);
     _key_event_slot_id = GetHAL().keyboard.onKeyEventRaw.connect(
@@ -61,15 +63,36 @@ void AppDisplay::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
         return;
     }
 
+    if (keyEvent.row == 2 && keyEvent.col == 11) {
+        _selected_index = (_selected_index + k_item_count - 1) % k_item_count;
+        render_interface();
+        return;
+    }
+    if (keyEvent.row == 3 && keyEvent.col == 11) {
+        _selected_index = (_selected_index + 1) % k_item_count;
+        render_interface();
+        return;
+    }
     if (keyEvent.row == 3 && keyEvent.col == 10) {
-        adjust_brightness(-k_volume_step);
+        if (_selected_index == 0) {
+            toggle_indicators();
+        } else {
+            adjust_brightness(-k_step);
+        }
         return;
     }
     if (keyEvent.row == 3 && keyEvent.col == 12) {
-        adjust_brightness(k_volume_step);
+        if (_selected_index == 0) {
+            toggle_indicators();
+        } else {
+            adjust_brightness(k_step);
+        }
         return;
     }
     if (keyEvent.row == 2 && keyEvent.col == 13) {
+        if (_selected_index == 0) {
+            toggle_indicators();
+        }
         return;
     }
 }
@@ -88,6 +111,18 @@ void AppDisplay::adjust_brightness(int delta)
     render_interface();
 }
 
+void AppDisplay::toggle_indicators()
+{
+    _indicators_enabled = !_indicators_enabled;
+    GetHAL().getSettings().SetInt(k_setting_indicators, _indicators_enabled ? 1 : 0);
+    GetHAL().setKeyboardBarVisible(_indicators_enabled);
+    if (!_indicators_enabled) {
+        GetHAL().canvasKeyboardBar.fillScreen(THEME_COLOR_BG);
+        GetHAL().pushCanvasKeyboardBar();
+    }
+    render_interface();
+}
+
 void AppDisplay::render_interface()
 {
     GetHAL().canvas.fillScreen(THEME_COLOR_BG);
@@ -99,16 +134,30 @@ void AppDisplay::render_interface()
 
     const int row_h   = FONT_HEIGHT + 2;
     const int start_y = 18;
-    int y = start_y;
 
-    GetHAL().canvas.fillRect(0, y - 1, GetHAL().canvas.width(), FONT_HEIGHT + 2, THEME_COLOR_ICON);
-    GetHAL().canvas.setTextColor(TFT_BLACK, THEME_COLOR_ICON);
-    GetHAL().canvas.setCursor(2, y);
-    GetHAL().canvas.printf("Brightness: %u", _brightness);
+    for (int i = 0; i < k_item_count; ++i) {
+        int y = start_y + i * row_h;
 
-    const int hint_y = start_y + row_h + 6;
+        if (i == _selected_index) {
+            GetHAL().canvas.fillRect(0, y - 1, GetHAL().canvas.width(), FONT_HEIGHT + 2, THEME_COLOR_ICON);
+            GetHAL().canvas.setTextColor(TFT_BLACK, THEME_COLOR_ICON);
+        } else {
+            GetHAL().canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
+        }
+
+        GetHAL().canvas.setCursor(2, y);
+        if (i == 0) {
+            GetHAL().canvas.printf("Indicators: %s", _indicators_enabled ? "On" : "Off");
+        } else if (i == 1) {
+            GetHAL().canvas.printf("Brightness: %u", _brightness);
+        }
+    }
+
+    const int hint_y = start_y + k_item_count * row_h + 6;
     GetHAL().canvas.setTextColor(TFT_LIGHTGREY, THEME_COLOR_BG);
     GetHAL().canvas.setCursor(0, hint_y);
+    GetHAL().canvas.print("Up/Down: select");
+    GetHAL().canvas.setCursor(0, hint_y + FONT_HEIGHT);
     GetHAL().canvas.print("Left/Right: change");
 
     GetHAL().pushCanvas();

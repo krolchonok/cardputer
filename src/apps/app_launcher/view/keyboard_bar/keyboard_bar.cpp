@@ -21,11 +21,18 @@
 
 void Launcher::render_keyboard_bar()
 {
+    bool visible = GetHAL().getSettings().GetInt("disp_kb_ind", 1) != 0;
+    _data.keyboard_bar_visible = visible;
+
     // Backgound
     int margin_x = 4;
     int margin_y = 6;
 
     GetHAL().canvasKeyboardBar.fillScreen(THEME_COLOR_BG);
+    if (!visible) {
+        GetHAL().pushCanvasKeyboardBar();
+        return;
+    }
     GetHAL().canvasKeyboardBar.fillSmoothRoundRect(
         margin_x, margin_y, GetHAL().canvasKeyboardBar.width() - margin_x * 2,
         GetHAL().canvasKeyboardBar.height() - margin_y * 2, (GetHAL().canvasKeyboardBar.height() - margin_y * 2) / 2,

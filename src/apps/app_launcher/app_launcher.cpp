@@ -30,6 +30,12 @@ void Launcher::onRunning()
 {
     // mclog::tagInfo(getAppInfo().name, "on running");
 
+    bool visible = GetHAL().getSettings().GetInt("disp_kb_ind", 1) != 0;
+    if (visible != _data.keyboard_bar_visible) {
+        _data.keyboard_bar_visible = visible;
+        render_keyboard_bar();
+    }
+
     update_system_bar();
 
     // If app is opened and running
