@@ -16,6 +16,7 @@ public:
     void SetInt(const std::string& key, int32_t value);
     bool GetBool(const std::string& key, bool default_value = false);
     void SetBool(const std::string& key, bool value);
+    void Commit();
     void EraseKey(const std::string& key);
     void EraseAll();
 

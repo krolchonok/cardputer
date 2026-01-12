@@ -23,6 +23,7 @@ private:
 
     int _wifi_app_id       = -1;
     int _sound_app_id      = -1;
+    int _display_app_id    = -1;
     int _child_app_id      = -1;
     bool _is_suspended     = false;
 

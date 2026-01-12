@@ -10,6 +10,7 @@
 #include <mooncake.h>
 #include <apps.h>
 #include <hal.h>
+#include <algorithm>
 
 using namespace mooncake;
 using namespace smooth_ui_toolkit;
@@ -38,6 +39,7 @@ void setup()
     GetMooncake().installApp(std::make_unique<AppSetWiFi>());
     GetMooncake().installApp(std::make_unique<AppSettingsMenu>());
     GetMooncake().installApp(std::make_unique<AppSettings>());
+    GetMooncake().installApp(std::make_unique<AppDisplay>());
     GetMooncake().installApp(std::make_unique<AppClock>());
     GetMooncake().installApp(std::make_unique<AppKeyboard>());
     GetMooncake().installApp(std::make_unique<AppImu>());
@@ -49,6 +51,12 @@ void setup()
 
     // Main loop
     audio::load_keyboard_sfx_settings();
+    {
+        int32_t bright = GetHAL().getSettings().GetInt("disp_bright", 10);
+        bright         = std::clamp<int32_t>(bright, 0, 10);
+        uint8_t hw_brightness = static_cast<uint8_t>((bright * 255 + 5) / 10);
+        GetHAL().display.setBrightness(hw_brightness);
+    }
     g_run_update = true;
 }
 

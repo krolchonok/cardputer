@@ -17,6 +17,8 @@
 #endif
 #if defined(ARDUINO)
 #include <WiFi.h>
+#include <SPI.h>
+#include <SD.h>
 #endif
 
 static std::unique_ptr<Hal> _hal_instance;
@@ -867,9 +869,20 @@ void Hal::handle_usb_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
 /*                                     SPI                                    */
 /* -------------------------------------------------------------------------- */
 #if defined(ARDUINO)
+static bool _spi_bus_initialized = false;
+
 void Hal::spi_init()
 {
-    mclog::tagWarn(_tag, "spi init not supported in this Arduino port");
+    mclog::tagInfo(_tag, "spi init");
+
+    if (_spi_bus_initialized) {
+        mclog::tagWarn(_tag, "spi bus already initialized, reusing");
+        return;
+    }
+
+    SPI.begin(HAL_PIN_SPI_SCLK, HAL_PIN_SPI_MISO, HAL_PIN_SPI_MOSI, HAL_PIN_SD_CARD_CS);
+    _spi_bus_initialized = true;
+    mclog::tagInfo(_tag, "spi bus initialized");
 }
 
 #else
@@ -918,16 +931,78 @@ void Hal::spi_init()
 #if defined(ARDUINO)
 void Hal::sd_card_init()
 {
-    mclog::tagWarn(_tag, "sd card init not supported in this Arduino port");
+    mclog::tagInfo(_tag, "sd card init");
+
+    if (!_spi_bus_initialized) {
+        spi_init();
+    }
+
+    if (_is_sd_card_mounted) {
+        mclog::tagInfo(_tag, "sd card already mounted");
+        return;
+    }
+
+    if (!SD.begin(HAL_PIN_SD_CARD_CS, SPI)) {
+        mclog::tagError(_tag, "failed to initialize sd card");
+        return;
+    }
+
+    _is_sd_card_mounted = true;
 }
 
 Hal::SdCardProbeResult_t Hal::sdCardProbe()
 {
     SdCardProbeResult_t result;
-    result.is_mounted = false;
-    result.size       = "Not Supported";
-    result.type       = "Type: Unknown";
+
+    if (!_is_sd_card_mounted) {
+        sd_card_init();
+        if (!_is_sd_card_mounted) {
+            result.is_mounted = false;
+            result.size       = "Not Found";
+            result.type       = "Type: Unknown";
+            result.name       = "Name: Unknown";
+            return result;
+        }
+    }
+
+    result.is_mounted = true;
     result.name       = "Name: Unknown";
+
+    uint8_t card_type = SD.cardType();
+    result.type       = "Type: ";
+    switch (card_type) {
+        case CARD_MMC:
+            result.type += "MMC";
+            break;
+        case CARD_SD:
+            result.type += "SDSC";
+            break;
+        case CARD_SDHC:
+            result.type += "SDHC/SDXC";
+            break;
+        default:
+            result.type += "Unknown";
+            break;
+    }
+
+    uint64_t card_size = SD.cardSize();
+    if (card_size > 0) {
+        result.size = fmt::format("Size: {:.1f} GB", (double)card_size / (1024.0 * 1024.0 * 1024.0));
+    } else {
+        result.size = "Size: Unknown";
+    }
+
+    if (SD.exists("/test.txt")) {
+        SD.remove("/test.txt");
+    }
+    File fp = SD.open("/test.txt", FILE_WRITE);
+    if (fp) {
+        fp.print("Hello, World!");
+        fp.close();
+    } else {
+        result.size = "Write Failed";
+    }
+
     return result;
 }
 

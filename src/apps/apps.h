@@ -21,3 +21,4 @@
 #include "app_gps/app_gps.h"
 #include "app_settings_menu/app_settings_menu.h"
 #include "app_settings/app_settings.h"
+#include "app_display/app_display.h"

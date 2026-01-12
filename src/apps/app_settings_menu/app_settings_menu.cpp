@@ -51,23 +51,53 @@ public:
 
     void onReadInput() override
     {
-        auto event = GetHAL().keyboard.getLatestKeyEventRaw();
-        if (event.state) {
-            if (event.row == 3 && event.col == 10) {
+        auto raw = GetHAL().keyboard.getLatestKeyEventRaw();
+        if (raw.state) {
+            if (raw.row == 3 && raw.col == 10) {
                 goLast();
-            } else if (event.row == 3 && event.col == 12) {
+                return;
+            }
+            if (raw.row == 3 && raw.col == 12) {
                 goNext();
-            } else if (event.row == 2 && event.col == 11) {
+                return;
+            }
+            if (raw.row == 2 && raw.col == 11) {
                 goLast();
-            } else if (event.row == 3 && event.col == 11) {
+                return;
+            }
+            if (raw.row == 3 && raw.col == 11) {
                 goNext();
-            } else if (event.row == 2 && event.col == 13) {
+                return;
+            }
+            if (raw.row == 2 && raw.col == 13) {
                 press(getSelectedKeyframe());
+                return;
             }
         } else {
-            if (event.row == 2 && event.col == 13) {
+            if (raw.row == 2 && raw.col == 13) {
                 release();
+                return;
             }
+        }
+
+        auto key = GetHAL().keyboard.getLatestKeyEvent();
+        if (!key.state) {
+            return;
+        }
+        switch (key.keyCode) {
+            case KEY_LEFT:
+            case KEY_UP:
+                goLast();
+                break;
+            case KEY_RIGHT:
+            case KEY_DOWN:
+                goNext();
+                break;
+            case KEY_ENTER:
+                press(getSelectedKeyframe());
+                break;
+            default:
+                break;
         }
     }
 
@@ -140,6 +170,9 @@ void AppSettingsMenu::onOpen()
     if (_wifi_app_id >= 0) {
         options.push_back({_wifi_app_id, "WiFi"});
     }
+    if (_display_app_id >= 0) {
+        options.push_back({_display_app_id, "Display"});
+    }
     if (_sound_app_id >= 0) {
         options.push_back({_sound_app_id, "Sound"});
     }
@@ -192,8 +225,9 @@ void AppSettingsMenu::onClose()
 
 void AppSettingsMenu::resolve_app_ids()
 {
-    _wifi_app_id  = -1;
-    _sound_app_id = -1;
+    _wifi_app_id    = -1;
+    _sound_app_id   = -1;
+    _display_app_id = -1;
 
     auto installed_apps = GetMooncake().getAppAbilityManager()->getAllAbilityInstance();
     for (auto& app_raw : installed_apps) {
@@ -202,6 +236,8 @@ void AppSettingsMenu::resolve_app_ids()
             _wifi_app_id = app->getId();
         } else if (app->getAppInfo().name == "Sound") {
             _sound_app_id = app->getId();
+        } else if (app->getAppInfo().name == "Display") {
+            _display_app_id = app->getId();
         }
     }
 }
