@@ -737,23 +737,6 @@ void Hal::irSend(uint8_t addr, uint8_t cmd)
 /* -------------------------------------------------------------------------- */
 /*                                     BLE                                    */
 /* -------------------------------------------------------------------------- */
-#if defined(ARDUINO)
-void Hal::bleKeyboardInit()
-{
-    mclog::tagWarn(_tag, "ble keyboard not supported in this Arduino port");
-}
-
-bool Hal::bleKeyboardIsConnected() const
-{
-    return false;
-}
-
-void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
-{
-    (void)keyEvent;
-}
-
-#else
 #include "utils/ble_hid_device/ble_hid_device_helper.h"
 
 void Hal::bleKeyboardInit()
@@ -784,6 +767,12 @@ bool Hal::bleKeyboardIsConnected() const
 
     auto state = ble_hid_device_helper_get_state();
     return (state == BLE_HID_DEVICE_STATE_CONNECTED);
+}
+
+const char* Hal::getBleKeyboardName() const
+{
+    const char* name = ble_hid_device_helper_get_device_name();
+    return name ? name : "Unknown";
 }
 
 void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
@@ -829,28 +818,10 @@ void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
         mclog::tagDebug(_tag, "ble keyboard key released");
     }
 }
-#endif
 
 /* -------------------------------------------------------------------------- */
 /*                                     USB                                    */
 /* -------------------------------------------------------------------------- */
-#if defined(ARDUINO)
-void Hal::usbKeyboardInit()
-{
-    mclog::tagWarn(_tag, "usb keyboard not supported in this Arduino port");
-}
-
-bool Hal::usbKeyboardIsConnected() const
-{
-    return false;
-}
-
-void Hal::handle_usb_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
-{
-    (void)keyEvent;
-}
-
-#else
 // https://github.com/espressif/esp-idf/blob/v5.4.2/examples/peripherals/usb/device/tusb_hid
 #include "utils/tusb_hid_device/tusb_hid_device_helper.h"
 
@@ -871,6 +842,26 @@ void Hal::usbKeyboardInit()
         [this](const Keyboard::KeyEvent_t& keyEvent) { handle_usb_keyboard_event(keyEvent); });
 
     _is_usb_keyboard_inited = true;
+}
+
+void Hal::usbKeyboardDeinit()
+{
+    if (!_is_usb_keyboard_inited) {
+        return;
+    }
+
+    if (_usb_keyboard_event_slot_id >= 0) {
+        keyboard.onKeyEvent.disconnect(_usb_keyboard_event_slot_id);
+        _usb_keyboard_event_slot_id = -1;
+    }
+
+    tusb_hid_device_helper_deinit();
+    _is_usb_keyboard_inited = false;
+}
+
+void Hal::usbSwitchToSerialJtag()
+{
+    tusb_hid_device_helper_switch_to_serial_jtag();
 }
 
 bool Hal::usbKeyboardIsConnected() const
@@ -900,7 +891,6 @@ void Hal::handle_usb_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
         mclog::tagDebug(_tag, "usb keyboard key released");
     }
 }
-#endif
 
 /* -------------------------------------------------------------------------- */
 /*                                     SPI                                    */

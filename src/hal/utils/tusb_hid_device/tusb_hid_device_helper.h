@@ -13,8 +13,11 @@ extern "C" {
 #endif
 
 void tusb_hid_device_helper_init(void);
+void tusb_hid_device_helper_deinit(void);
 void tusb_hid_device_helper_report(uint8_t modifier, uint8_t* keycode);
 bool tusb_hid_device_helper_is_mounted(void);
+void tusb_hid_device_helper_switch_to_serial_jtag(void);
+void tusb_hid_device_helper_release_keys(void);
 
 #ifdef __cplusplus
 }
