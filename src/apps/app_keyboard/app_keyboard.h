@@ -60,6 +60,12 @@ private:
     uint32_t _info_update_time           = 0;
     bool _is_selecting                   = true;
     bool _is_keyboard_active             = false;
+    bool _last_ble_connected             = false;
+    bool _last_usb_connected             = false;
+    KeyboardSelectorMenu::KeyboardType_t _keyboard_type = KeyboardSelectorMenu::KEYBOARD_TYPE_NONE;
+    bool _show_restart_confirm           = false;
+    bool _restart_confirm_dirty          = false;
+    int _restart_confirm_choice          = 0;
     KeyboardSelectorMenu* _selector_menu = nullptr;
 
     void select_keyboard_type();
@@ -68,4 +74,6 @@ private:
     void update_connection_info();
     void render_keyboard_interface();
     void render_connection_status();
+    void render_restart_confirm();
+    void update_restart_confirm();
 };

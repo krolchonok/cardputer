@@ -46,9 +46,14 @@
 #include "services/bas/ble_svc_bas.h"
 #endif
 
+#ifndef CONFIG_EXAMPLE_HID_DEVICE_ROLE
+#define CONFIG_EXAMPLE_HID_DEVICE_ROLE 2
+#endif
+
 static const char *TAG = "ble_hid";
 
 static BleHidDeviceState_t s_ble_hid_keyboard_state = BLE_HID_DEVICE_STATE_IDLE;
+static bool s_ble_hid_inited = false;
 
 typedef struct {
     TaskHandle_t task_hdl;
@@ -367,13 +372,13 @@ void ble_hid_demo_task_kbd(void *pvParameters)
 }
 #endif
 static esp_hid_raw_report_map_t ble_report_maps[] = {
-#if !CONFIG_BT_NIMBLE_ENABLED || CONFIG_EXAMPLE_HID_DEVICE_ROLE == 1
-    /* This block is compiled for bluedroid as well */
-    {.data = mediaReportMap, .len = sizeof(mediaReportMap)}
-#elif CONFIG_EXAMPLE_HID_DEVICE_ROLE && CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
+#if CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
     {.data = keyboardReportMap, .len = sizeof(keyboardReportMap)},
-#elif CONFIG_EXAMPLE_HID_DEVICE_ROLE && CONFIG_EXAMPLE_HID_DEVICE_ROLE == 3
+#elif CONFIG_EXAMPLE_HID_DEVICE_ROLE == 3
     {.data = mouseReportMap, .len = sizeof(mouseReportMap)},
+#else
+    /* Media by default to match the original example behavior. */
+    {.data = mediaReportMap, .len = sizeof(mediaReportMap)}
 #endif
 };
 
@@ -916,23 +921,29 @@ void ble_hid_device_host_task(void *param)
 void ble_store_config_init(void);
 #endif
 
-void _demo_app_main(void)
+static bool ble_hid_init_impl(void)
 {
     esp_err_t ret;
 #if HID_DEV_MODE == HIDD_IDLE_MODE
     ESP_LOGE(TAG, "Please turn on BT HID device or BLE!");
-    return;
+    return false;
 #endif
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(ret);
+    if (ret != ESP_OK && ret != ESP_ERR_NVS_NOT_INITIALIZED) {
+        ESP_LOGE(TAG, "nvs_flash_init failed: %d", ret);
+        return false;
+    }
 
     ESP_LOGI(TAG, "setting hid gap, mode:%d", HID_DEV_MODE);
     ret = esp_hid_gap_init(HID_DEV_MODE);
-    ESP_ERROR_CHECK(ret);
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "esp_hid_gap_init failed: %d", ret);
+        return false;
+    }
 
 #if CONFIG_BT_BLE_ENABLED || CONFIG_BT_NIMBLE_ENABLED
 #if CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
@@ -942,16 +953,22 @@ void _demo_app_main(void)
 #else
     ret = esp_hid_ble_gap_adv_init(ESP_HID_APPEARANCE_GENERIC, ble_hid_config.device_name);
 #endif
-    ESP_ERROR_CHECK(ret);
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "esp_hid_ble_gap_adv_init failed: %d", ret);
+        return false;
+    }
 #if CONFIG_BT_BLE_ENABLED
     if ((ret = esp_ble_gatts_register_callback(esp_hidd_gatts_event_handler)) != ESP_OK) {
         ESP_LOGE(TAG, "GATTS register callback failed: %d", ret);
-        return;
+        return false;
     }
 #endif
     ESP_LOGI(TAG, "setting ble device");
-    ESP_ERROR_CHECK(
-        esp_hidd_dev_init(&ble_hid_config, ESP_HID_TRANSPORT_BLE, ble_hidd_event_callback, &s_ble_hid_param.hid_dev));
+    ret = esp_hidd_dev_init(&ble_hid_config, ESP_HID_TRANSPORT_BLE, ble_hidd_event_callback, &s_ble_hid_param.hid_dev);
+    if (ret != ESP_OK && !(ret == ESP_ERR_INVALID_STATE && s_ble_hid_param.hid_dev != NULL)) {
+        ESP_LOGE(TAG, "esp_hidd_dev_init (BLE) failed: %d", ret);
+        return false;
+    }
 #endif
 
 #if CONFIG_BT_HID_DEVICE_ENABLED
@@ -964,11 +981,22 @@ void _demo_app_main(void)
     esp_bt_gap_set_cod(cod, ESP_BT_SET_COD_MAJOR_MINOR);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     ESP_LOGI(TAG, "setting bt device");
-    ESP_ERROR_CHECK(
-        esp_hidd_dev_init(&bt_hid_config, ESP_HID_TRANSPORT_BT, bt_hidd_event_callback, &s_bt_hid_param.hid_dev));
+    ret = esp_hidd_dev_init(&bt_hid_config, ESP_HID_TRANSPORT_BT, bt_hidd_event_callback, &s_bt_hid_param.hid_dev);
+    if (ret != ESP_OK && !(ret == ESP_ERR_INVALID_STATE && s_bt_hid_param.hid_dev != NULL)) {
+        ESP_LOGE(TAG, "esp_hidd_dev_init (BT) failed: %d", ret);
+        return false;
+    }
 #if CONFIG_BT_SDP_COMMON_ENABLED
-    ESP_ERROR_CHECK(esp_sdp_register_callback(esp_sdp_cb));
-    ESP_ERROR_CHECK(esp_sdp_init());
+    ret = esp_sdp_register_callback(esp_sdp_cb);
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "esp_sdp_register_callback failed: %d", ret);
+        return false;
+    }
+    ret = esp_sdp_init();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "esp_sdp_init failed: %d", ret);
+        return false;
+    }
 #endif /* CONFIG_BT_SDP_COMMON_ENABLED */
 #endif /* CONFIG_BT_HID_DEVICE_ENABLED */
 #if CONFIG_BT_NIMBLE_ENABLED
@@ -978,18 +1006,31 @@ void _demo_app_main(void)
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
     /* Starting nimble task after gatts is initialized*/
     ret = esp_nimble_enable(ble_hid_device_host_task);
-    if (ret) {
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
         ESP_LOGE(TAG, "esp_nimble_enable failed: %d", ret);
+        return false;
     }
 
     ESP_LOGI(TAG, "Setting battery level to 100%%");
     ble_svc_bas_battery_level_set(100);
 #endif
+
+    return true;
 }
 
-void ble_hid_device_helper_init(void)
+bool ble_hid_device_helper_init(void)
 {
-    _demo_app_main();
+    if (s_ble_hid_inited) {
+        ESP_LOGI(TAG, "BLE HID already initialized, name: %s", ble_hid_config.device_name);
+        ble_hid_device_helper_start_advertising();
+        return true;
+    }
+    s_ble_hid_inited = ble_hid_init_impl();
+    if (s_ble_hid_inited) {
+        ESP_LOGI(TAG, "Bluetooth enabled, BLE HID name: %s", ble_hid_config.device_name);
+        ble_hid_device_helper_start_advertising();
+    }
+    return s_ble_hid_inited;
 }
 
 void ble_hid_device_helper_send(uint8_t *buffer)
@@ -1000,4 +1041,21 @@ void ble_hid_device_helper_send(uint8_t *buffer)
 BleHidDeviceState_t ble_hid_device_helper_get_state(void)
 {
     return s_ble_hid_keyboard_state;
+}
+
+const char* ble_hid_device_helper_get_device_name(void)
+{
+    return ble_hid_config.device_name;
+}
+
+void ble_hid_device_helper_start_advertising(void)
+{
+#if CONFIG_BT_BLE_ENABLED || CONFIG_BT_NIMBLE_ENABLED
+    esp_err_t ret = esp_hid_ble_gap_adv_start();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "BLE HID advertising start failed: %d", ret);
+    } else {
+        ESP_LOGI(TAG, "BLE HID advertising started");
+    }
+#endif
 }

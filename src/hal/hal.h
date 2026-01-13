@@ -97,10 +97,13 @@ public:
     /* ----------------------------------- BLE ---------------------------------- */
     void bleKeyboardInit();
     bool bleKeyboardIsConnected() const;
+    const char* getBleKeyboardName() const;
 
     /* ----------------------------------- USB ---------------------------------- */
     void usbKeyboardInit();
     bool usbKeyboardIsConnected() const;
+    void usbKeyboardDeinit();
+    void usbSwitchToSerialJtag();
 
     /* -------------------------------- Settings -------------------------------- */
     Settings& getSettings()
