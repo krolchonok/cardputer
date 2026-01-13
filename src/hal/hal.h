@@ -31,6 +31,7 @@ public:
     void feedTheDog();
     std::vector<uint8_t> getDeviceMac();
     std::string getDeviceMacString();
+    std::string getBleMacString();
 
     /* --------------------------------- Display -------------------------------- */
     M5GFX& display                = M5.Display;

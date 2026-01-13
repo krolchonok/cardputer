@@ -6,6 +6,7 @@
 // https://github.com/espressif/esp-idf/blob/v5.4.2/examples/bluetooth/esp_hid_device
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {

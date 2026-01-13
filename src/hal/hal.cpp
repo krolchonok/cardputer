@@ -84,6 +84,24 @@ std::string Hal::getDeviceMacString()
     return fmt::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
+std::string Hal::getBleMacString()
+{
+    // BLE MAC is base MAC + 2
+    auto mac = getDeviceMac();
+    // Add 2 to the MAC address (BLE uses base MAC + 2)
+    uint64_t macVal = 0;
+    for (int i = 0; i < 6; i++) {
+        macVal = (macVal << 8) | mac[i];
+    }
+    macVal += 2;
+    uint8_t bleMac[6];
+    for (int i = 5; i >= 0; i--) {
+        bleMac[i] = macVal & 0xFF;
+        macVal >>= 8;
+    }
+    return fmt::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", bleMac[0], bleMac[1], bleMac[2], bleMac[3], bleMac[4], bleMac[5]);
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                  Dispplay                                  */
 /* -------------------------------------------------------------------------- */
@@ -737,20 +755,19 @@ void Hal::irSend(uint8_t addr, uint8_t cmd)
 /* -------------------------------------------------------------------------- */
 /*                                     BLE                                    */
 /* -------------------------------------------------------------------------- */
-#include "utils/ble_hid_device/ble_hid_device_helper.h"
+#include "utils/ble_keyboard_wrapper/ble_keyboard_wrapper.h"
 
 void Hal::bleKeyboardInit()
 {
     if (_is_ble_keyboard_inited) {
         mclog::tagWarn(_tag, "ble keyboard already initialized");
-        ble_hid_device_helper_start_advertising();
         return;
     }
 
     mclog::tagInfo(_tag, "ble keyboard init");
 
-    // Initialize BLE HID device
-    if (!ble_hid_device_helper_init()) {
+    // Initialize BLE Keyboard wrapper
+    if (!ble_keyboard_wrapper_init("CardputerADV")) {
         mclog::tagError(_tag, "ble keyboard init failed");
         return;
     }
@@ -769,14 +786,12 @@ bool Hal::bleKeyboardIsConnected() const
         return false;
     }
 
-    auto state = ble_hid_device_helper_get_state();
-    return (state == BLE_HID_DEVICE_STATE_CONNECTED);
+    return ble_keyboard_wrapper_is_connected();
 }
 
 const char* Hal::getBleKeyboardName() const
 {
-    const char* name = ble_hid_device_helper_get_device_name();
-    return name ? name : "Unknown";
+    return "CardputerADV";
 }
 
 void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
@@ -786,39 +801,15 @@ void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
         return;
     }
 
-    // Create HID buffer (8 bytes: modifier, reserved, keycode1-6)
-    uint8_t buffer[8] = {0};
-
     // Handle key press/release
     if (keyEvent.state) {
-        // Get current modifier state from keyboard
-        uint8_t modifierMask = keyboard.getModifierMask();
-
-        // Set modifier byte
-        buffer[0] = modifierMask;
-
-        // For modifier keys themselves, don't set keycode
-        if (keyEvent.isModifier) {
-            buffer[2] = 0;  // No keycode for pure modifier keys
-        } else {
-            buffer[2] = keyEvent.keyCode;
-        }
-
-        // Send key press
-        ble_hid_device_helper_send(buffer);
-        mclog::tagDebug(_tag, "ble keyboard sent key: {} (code: {}, modifier: 0x{:02x})",
-                        keyEvent.keyName ? keyEvent.keyName : "special", (int)keyEvent.keyCode, modifierMask);
+        // Key pressed - send the HID keycode directly
+        ble_keyboard_wrapper_press(keyEvent.keyCode);
+        mclog::tagDebug(_tag, "ble keyboard sent key: {} (code: {})",
+                        keyEvent.keyName ? keyEvent.keyName : "special", (int)keyEvent.keyCode);
     } else {
-        // Key released - for modifier keys, update modifier state and send
-        if (keyEvent.isModifier) {
-            uint8_t modifierMask = keyboard.getModifierMask();
-            buffer[0]            = modifierMask;
-            buffer[2]            = 0;
-        } else {
-            // For non-modifier keys, send empty buffer (all keys up)
-            memset(buffer, 0, sizeof(buffer));
-        }
-        ble_hid_device_helper_send(buffer);
+        // Key released
+        ble_keyboard_wrapper_release(keyEvent.keyCode);
         mclog::tagDebug(_tag, "ble keyboard key released");
     }
 }

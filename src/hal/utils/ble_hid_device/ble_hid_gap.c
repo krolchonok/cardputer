@@ -14,13 +14,11 @@
 
 #include "ble_hid_gap.h"
 
-#if defined(ARDUINO)
-#define BLE_HID_GAP_HAS_NIMBLE 0
-#elif defined(__has_include)
-#if __has_include("host/ble_hs.h")
+// For Arduino with NimBLE, force enable
+#if defined(ARDUINO) || defined(CONFIG_BT_NIMBLE_ENABLED)
 #define BLE_HID_GAP_HAS_NIMBLE 1
-#else
-#define BLE_HID_GAP_HAS_NIMBLE 0
+#ifndef CONFIG_BT_NIMBLE_ENABLED
+#define CONFIG_BT_NIMBLE_ENABLED 1
 #endif
 #else
 #define BLE_HID_GAP_HAS_NIMBLE 0
@@ -51,10 +49,6 @@ esp_err_t esp_hid_ble_gap_adv_start(void)
 }
 
 #else
-
-#if defined(ARDUINO) && !defined(CONFIG_BT_NIMBLE_ENABLED)
-#define CONFIG_BT_NIMBLE_ENABLED 1
-#endif
 
 #if CONFIG_BT_NIMBLE_ENABLED
 #include "host/ble_hs.h"
@@ -1075,27 +1069,7 @@ static esp_err_t init_low_level(uint8_t mode)
 static esp_err_t init_low_level(uint8_t mode)
 {
     esp_err_t ret;
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-#if CONFIG_IDF_TARGET_ESP32
-    bt_cfg.mode = mode;
-#endif
-    ret = esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
-    if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_mem_release failed: %d", ret);
-        return ret;
-    }
-    ret = esp_bt_controller_init(&bt_cfg);
-    if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
-        return ret;
-    }
-
-    ret = esp_bt_controller_enable(mode);
-    if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_enable failed: %d", ret);
-        return ret;
-    }
-
+    // Assume BT controller is already initialized in HAL
     ret = esp_nimble_init();
     if (ret) {
         ESP_LOGE(TAG, "esp_nimble_init failed: %d", ret);

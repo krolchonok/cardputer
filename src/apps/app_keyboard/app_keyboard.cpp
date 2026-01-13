@@ -174,6 +174,10 @@ void AppKeyboard::render_keyboard_interface()
 
     GetHAL().canvas.setTextColor(TFT_CYAN, THEME_COLOR_BG);
     GetHAL().canvas.println("Type to send keys...");
+
+    GetHAL().canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
+    GetHAL().canvas.println(("BLE MAC: " + GetHAL().getBleMacString()).c_str());
+
     GetHAL().pushCanvas();
 }
 

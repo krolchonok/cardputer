@@ -928,15 +928,7 @@ static bool ble_hid_init_impl(void)
     ESP_LOGE(TAG, "Please turn on BT HID device or BLE!");
     return false;
 #endif
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    if (ret != ESP_OK && ret != ESP_ERR_NVS_NOT_INITIALIZED) {
-        ESP_LOGE(TAG, "nvs_flash_init failed: %d", ret);
-        return false;
-    }
+    // NVS flash is initialized in HAL
 
     ESP_LOGI(TAG, "setting hid gap, mode:%d", HID_DEV_MODE);
     ret = esp_hid_gap_init(HID_DEV_MODE);
