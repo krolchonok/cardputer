@@ -743,13 +743,17 @@ void Hal::bleKeyboardInit()
 {
     if (_is_ble_keyboard_inited) {
         mclog::tagWarn(_tag, "ble keyboard already initialized");
+        ble_hid_device_helper_start_advertising();
         return;
     }
 
     mclog::tagInfo(_tag, "ble keyboard init");
 
     // Initialize BLE HID device
-    ble_hid_device_helper_init();
+    if (!ble_hid_device_helper_init()) {
+        mclog::tagError(_tag, "ble keyboard init failed");
+        return;
+    }
 
     // Register keyboard event callback to automatically forward keys
     _ble_keyboard_event_slot_id = keyboard.onKeyEvent.connect(
