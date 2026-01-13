@@ -117,9 +117,13 @@ void Keyboard::update_modifier_mask(const KeyEventRaw_t& key)
         }
     }
 
-    // Check capslock key (2, 1)
+    // Treat capslock key (2, 1) as another shift
     if (key.row == 2 && key.col == 1) {
-        _capslock_state = key.state;
+        if (key.state) {
+            _modifier_mask |= KEY_MOD_LSHIFT;
+        } else {
+            _modifier_mask &= ~KEY_MOD_LSHIFT;
+        }
     }
 }
 
@@ -159,7 +163,7 @@ const KeyValue_t _key_value_map[4][14] = {{{"`", KEY_GRAVE, "~", KEY_GRAVE},
                                            {"]", KEY_RIGHTBRACE, "}", KEY_RIGHTBRACE},
                                            {"\\", KEY_BACKSLASH, "|", KEY_BACKSLASH}},
                                           {{"shift", KEY_LEFTSHIFT, "shift", KEY_LEFTSHIFT},
-                                           {"capslock", KEY_CAPSLOCK, "capslock", KEY_CAPSLOCK},
+                                           {"shift", KEY_LEFTSHIFT, "shift", KEY_LEFTSHIFT},
                                            {"a", KEY_A, "A", KEY_A},
                                            {"s", KEY_S, "S", KEY_S},
                                            {"d", KEY_D, "D", KEY_D},
@@ -202,8 +206,8 @@ Keyboard::KeyEvent_t Keyboard::convertToKeyEvent(const KeyEventRaw_t& key)
     bool isLetter            = (baseKeyCode >= KEY_A && baseKeyCode <= KEY_Z);
 
     if (isLetter) {
-        // For letters, use shift OR caps lock
-        use_shifted_version = (_modifier_mask & KEY_MOD_LSHIFT) || _capslock_state || _is_capslock_locked;
+        // For letters, use shift or caps lock (if set by other means)
+        use_shifted_version = (_modifier_mask & KEY_MOD_LSHIFT) || _is_capslock_locked;
     } else {
         // For non-letters (numbers, symbols), only use shift
         use_shifted_version = (_modifier_mask & KEY_MOD_LSHIFT);
@@ -219,7 +223,7 @@ Keyboard::KeyEvent_t Keyboard::convertToKeyEvent(const KeyEventRaw_t& key)
         ret.keyName = _key_value_map[key.row][key.col].firstName;
     }
 
-    if (ret.keyCode == KEY_LEFTSHIFT || ret.keyCode == KEY_LEFTCTRL || ret.keyCode == KEY_CAPSLOCK) {
+    if (ret.keyCode == KEY_LEFTSHIFT || ret.keyCode == KEY_LEFTCTRL) {
         ret.isModifier = true;
     } else {
         ret.isModifier = false;

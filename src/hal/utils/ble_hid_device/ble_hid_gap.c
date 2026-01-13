@@ -14,6 +14,48 @@
 
 #include "ble_hid_gap.h"
 
+#if defined(ARDUINO)
+#define BLE_HID_GAP_HAS_NIMBLE 0
+#elif defined(__has_include)
+#if __has_include("host/ble_hs.h")
+#define BLE_HID_GAP_HAS_NIMBLE 1
+#else
+#define BLE_HID_GAP_HAS_NIMBLE 0
+#endif
+#else
+#define BLE_HID_GAP_HAS_NIMBLE 0
+#endif
+
+#if !BLE_HID_GAP_HAS_NIMBLE
+static const char *TAG = "ESP_HID_GAP";
+
+esp_err_t esp_hid_gap_init(uint8_t mode)
+{
+    (void)mode;
+    ESP_LOGW(TAG, "NimBLE headers not available; BLE HID gap init skipped");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
+{
+    (void)appearance;
+    (void)device_name;
+    ESP_LOGW(TAG, "NimBLE headers not available; BLE HID advertising init skipped");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t esp_hid_ble_gap_adv_start(void)
+{
+    ESP_LOGW(TAG, "NimBLE headers not available; BLE HID advertising start skipped");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+#else
+
+#if defined(ARDUINO) && !defined(CONFIG_BT_NIMBLE_ENABLED)
+#define CONFIG_BT_NIMBLE_ENABLED 1
+#endif
+
 #if CONFIG_BT_NIMBLE_ENABLED
 #include "host/ble_hs.h"
 #include "nimble/nimble_port.h"
@@ -108,7 +150,7 @@ const char *bt_gap_evt_str(uint8_t event)
 }
 #endif
 
-#if CONFIG_BT_BLE_ENABLED
+#if CONFIG_BT_BLE_ENABLED && !CONFIG_BT_NIMBLE_ENABLED
 const char *esp_ble_key_type_str(esp_ble_key_type_t key_type)
 {
     const char *key_str = NULL;
@@ -232,7 +274,7 @@ static void add_bt_scan_result(esp_bd_addr_t bda, esp_bt_cod_t *cod, esp_bt_uuid
 }
 #endif
 
-#if CONFIG_BT_BLE_ENABLED
+#if CONFIG_BT_BLE_ENABLED && !CONFIG_BT_NIMBLE_ENABLED
 static void add_ble_scan_result(esp_bd_addr_t bda, esp_ble_addr_type_t addr_type, uint16_t appearance, uint8_t *name,
                                 uint8_t name_len, int rssi)
 {
@@ -381,7 +423,7 @@ static void handle_bt_device_result(struct disc_res_param *disc_res)
 }
 #endif
 
-#if CONFIG_BT_BLE_ENABLED
+#if CONFIG_BT_BLE_ENABLED && !CONFIG_BT_NIMBLE_ENABLED
 static void handle_ble_device_result(struct ble_scan_result_evt_param *scan_rst)
 {
     uint16_t uuid       = 0;
@@ -431,7 +473,7 @@ static void handle_ble_device_result(struct ble_scan_result_evt_param *scan_rst)
         add_ble_scan_result(scan_rst->bda, scan_rst->ble_addr_type, appearance, adv_name, adv_name_len, scan_rst->rssi);
     }
 }
-#endif /* CONFIG_BT_BLE_ENABLED */
+#endif /* CONFIG_BT_BLE_ENABLED && !CONFIG_BT_NIMBLE_ENABLED */
 
 #if CONFIG_BT_HID_DEVICE_ENABLED
 /*
@@ -537,7 +579,7 @@ static esp_err_t start_bt_scan(uint32_t seconds)
 }
 #endif
 
-#if CONFIG_BT_BLE_ENABLED
+#if CONFIG_BT_BLE_ENABLED && !CONFIG_BT_NIMBLE_ENABLED
 /*
  * BLE GAP
  * */
@@ -1145,3 +1187,5 @@ esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_resul
     return ESP_OK;
 }
 #endif
+
+#endif /* BLE_HID_GAP_HAS_NIMBLE */

@@ -29,7 +29,10 @@ void LauncherMenu::init(int launcherAppId)
 
         // Skip launcher and apps that live under Settings
         if (app->getId() == launcherAppId || app->getAppInfo().name == "SetWiFi" ||
-            app->getAppInfo().name == "Sound" || app->getAppInfo().name == "Display") {
+            app->getAppInfo().name == "Sound" || app->getAppInfo().name == "Display" ||
+            app->getAppInfo().name == "Scan" || app->getAppInfo().name == "Remote" ||
+            app->getAppInfo().name == "StringIR" || app->getAppInfo().name == "Clock" ||
+            app->getAppInfo().name == "IMU" || app->getAppInfo().name == "SDCard") {
             continue;
         }
 

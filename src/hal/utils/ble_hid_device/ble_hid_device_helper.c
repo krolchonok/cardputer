@@ -46,6 +46,10 @@
 #include "services/bas/ble_svc_bas.h"
 #endif
 
+#ifndef CONFIG_EXAMPLE_HID_DEVICE_ROLE
+#define CONFIG_EXAMPLE_HID_DEVICE_ROLE 2
+#endif
+
 static const char *TAG = "ble_hid";
 
 static BleHidDeviceState_t s_ble_hid_keyboard_state = BLE_HID_DEVICE_STATE_IDLE;
@@ -367,13 +371,13 @@ void ble_hid_demo_task_kbd(void *pvParameters)
 }
 #endif
 static esp_hid_raw_report_map_t ble_report_maps[] = {
-#if !CONFIG_BT_NIMBLE_ENABLED || CONFIG_EXAMPLE_HID_DEVICE_ROLE == 1
-    /* This block is compiled for bluedroid as well */
-    {.data = mediaReportMap, .len = sizeof(mediaReportMap)}
-#elif CONFIG_EXAMPLE_HID_DEVICE_ROLE && CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
+#if CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
     {.data = keyboardReportMap, .len = sizeof(keyboardReportMap)},
-#elif CONFIG_EXAMPLE_HID_DEVICE_ROLE && CONFIG_EXAMPLE_HID_DEVICE_ROLE == 3
+#elif CONFIG_EXAMPLE_HID_DEVICE_ROLE == 3
     {.data = mouseReportMap, .len = sizeof(mouseReportMap)},
+#else
+    /* Media by default to match the original example behavior. */
+    {.data = mediaReportMap, .len = sizeof(mediaReportMap)}
 #endif
 };
 
@@ -1000,4 +1004,9 @@ void ble_hid_device_helper_send(uint8_t *buffer)
 BleHidDeviceState_t ble_hid_device_helper_get_state(void)
 {
     return s_ble_hid_keyboard_state;
+}
+
+const char* ble_hid_device_helper_get_device_name(void)
+{
+    return ble_hid_config.device_name;
 }
