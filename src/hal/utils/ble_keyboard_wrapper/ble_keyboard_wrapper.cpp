@@ -47,3 +47,25 @@ void ble_keyboard_wrapper_release_all(void)
         _bleKeyboard->releaseAll();
     }
 }
+
+void ble_keyboard_wrapper_send_report(uint8_t modifiers, const uint8_t* keys)
+{
+    if (_bleKeyboard == nullptr || !_bleKeyboard->isConnected()) {
+        return;
+    }
+
+    KeyReport report;
+    report.modifiers = modifiers;
+    report.reserved  = 0;
+    if (keys) {
+        for (int i = 0; i < 6; ++i) {
+            report.keys[i] = keys[i];
+        }
+    } else {
+        for (int i = 0; i < 6; ++i) {
+            report.keys[i] = 0;
+        }
+    }
+
+    _bleKeyboard->sendReport(&report);
+}

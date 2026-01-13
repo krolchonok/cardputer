@@ -801,17 +801,52 @@ void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
         return;
     }
 
-    // Handle key press/release
+    // Maintain a list of currently pressed non-modifier keys (up to 6)
+    static std::vector<uint8_t> pressedKeys;
+
+    // Update pressedKeys based on event
     if (keyEvent.state) {
-        // Key pressed - send the HID keycode directly
-        ble_keyboard_wrapper_press(keyEvent.keyCode);
-        mclog::tagDebug(_tag, "ble keyboard sent key: {} (code: {})",
-                        keyEvent.keyName ? keyEvent.keyName : "special", (int)keyEvent.keyCode);
+        // Key pressed - add if non-modifier
+        if (!keyEvent.isModifier && keyEvent.keyCode != KEY_NONE) {
+            if (std::find(pressedKeys.begin(), pressedKeys.end(), (uint8_t)keyEvent.keyCode) == pressedKeys.end()) {
+                if (pressedKeys.size() < 6) {
+                    pressedKeys.push_back((uint8_t)keyEvent.keyCode);
+                } else {
+                    // if overflow, drop the oldest
+                    pressedKeys.erase(pressedKeys.begin());
+                    pressedKeys.push_back((uint8_t)keyEvent.keyCode);
+                }
+            }
+        }
     } else {
-        // Key released
-        ble_keyboard_wrapper_release(keyEvent.keyCode);
-        mclog::tagDebug(_tag, "ble keyboard key released");
+        // Key released - remove from list if present
+        if (!keyEvent.isModifier && keyEvent.keyCode != KEY_NONE) {
+            auto it = std::find(pressedKeys.begin(), pressedKeys.end(), (uint8_t)keyEvent.keyCode);
+            if (it != pressedKeys.end()) {
+                pressedKeys.erase(it);
+            }
+        }
     }
+
+    // Build 6-key array
+    uint8_t keys[6] = {0, 0, 0, 0, 0, 0};
+    for (size_t i = 0; i < pressedKeys.size() && i < 6; ++i) {
+        keys[i] = pressedKeys[i];
+    }
+
+    // Get modifier mask from keyboard state (same as USB handling)
+    uint8_t modifiers = GetHAL().keyboard.getModifierMask();
+
+    // Send HID report via BLE (mimic USB behavior)
+    if (modifiers == 0 && pressedKeys.empty()) {
+        // no keys, send empty report
+        ble_keyboard_wrapper_send_report(0, nullptr);
+    } else {
+        ble_keyboard_wrapper_send_report(modifiers, keys);
+    }
+
+    mclog::tagDebug(_tag, "ble keyboard report sent: modifiers=0x{:02x}, keys=[{}]",
+                    modifiers, fmt::join(pressedKeys, ","));
 }
 
 /* -------------------------------------------------------------------------- */
