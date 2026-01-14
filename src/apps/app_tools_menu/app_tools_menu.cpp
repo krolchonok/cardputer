@@ -185,6 +185,15 @@ void AppToolsMenu::onOpen()
     if (_sdcard_app_id >= 0) {
         options.push_back({_sdcard_app_id, "SDCard", _sdcard_app_icon});
     }
+    if (_record_app_id >= 0) {
+        options.push_back({_record_app_id, "Record", _record_app_icon});
+    }
+    if (_chat_app_id >= 0) {
+        options.push_back({_chat_app_id, "Chat", _chat_app_icon});
+    }
+    if (_keyboard_app_id >= 0) {
+        options.push_back({_keyboard_app_id, "Keyboard", _keyboard_app_icon});
+    }
     _menu->init(options);
     _menu->onOpen = [this](int appId) {
         if (appId >= 0) {
@@ -240,6 +249,12 @@ void AppToolsMenu::resolve_app_ids()
     _imu_app_icon     = nullptr;
     _sdcard_app_id    = -1;
     _sdcard_app_icon  = nullptr;
+    _record_app_id    = -1;
+    _record_app_icon  = nullptr;
+    _chat_app_id      = -1;
+    _chat_app_icon    = nullptr;
+    _keyboard_app_id  = -1;
+    _keyboard_app_icon = nullptr;
 
     auto installed_apps = GetMooncake().getAppAbilityManager()->getAllAbilityInstance();
     for (auto& app_raw : installed_apps) {
@@ -253,6 +268,15 @@ void AppToolsMenu::resolve_app_ids()
         } else if (app->getAppInfo().name == "SDCard") {
             _sdcard_app_id = app->getId();
             _sdcard_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
+        } else if (app->getAppInfo().name == "Record") {
+            _record_app_id = app->getId();
+            _record_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
+        } else if (app->getAppInfo().name == "Chat") {
+            _chat_app_id = app->getId();
+            _chat_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
+        } else if (app->getAppInfo().name == "Keyboard") {
+            _keyboard_app_id = app->getId();
+            _keyboard_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
         }
     }
 }

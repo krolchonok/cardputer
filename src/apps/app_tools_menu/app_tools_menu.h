@@ -29,6 +29,12 @@ private:
     AppIcon_t* _imu_app_icon = nullptr;
     int _sdcard_app_id  = -1;
     AppIcon_t* _sdcard_app_icon = nullptr;
+    int _record_app_id  = -1;
+    AppIcon_t* _record_app_icon = nullptr;
+    int _chat_app_id    = -1;
+    AppIcon_t* _chat_app_icon = nullptr;
+    int _keyboard_app_id = -1;
+    AppIcon_t* _keyboard_app_icon = nullptr;
     int _child_app_id   = -1;
     bool _is_suspended  = false;
 

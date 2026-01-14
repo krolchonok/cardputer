@@ -32,9 +32,9 @@ void setup()
 
     // Install apps
     GetMooncake().installApp(std::make_unique<Launcher>());
-    GetMooncake().installApp(std::make_unique<AppToolsMenu>());
     GetMooncake().installApp(std::make_unique<AppWifiMenu>());
     GetMooncake().installApp(std::make_unique<AppIrMenu>());
+    GetMooncake().installApp(std::make_unique<AppToolsMenu>());
     GetMooncake().installApp(std::make_unique<AppWifiScan>());
     GetMooncake().installApp(std::make_unique<AppRecord>());
     GetMooncake().installApp(std::make_unique<AppChat>());
