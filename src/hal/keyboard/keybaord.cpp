@@ -58,14 +58,16 @@ void Keyboard::update()
     }
 
     remap(_key_event_raw_buffer);
-    // mclog::tagDebug(_tag, "key event raw: ({}, {}): {}", _key_event_raw_buffer.row, _key_event_raw_buffer.col,
-    //                 _key_event_raw_buffer.state);
+    mclog::tagDebug(_tag, "raw event -> row:{}, col:{}, state:{}", _key_event_raw_buffer.row, _key_event_raw_buffer.col,
+                    _key_event_raw_buffer.state);
     onKeyEventRaw.emit(_key_event_raw_buffer);
 
     update_modifier_mask(_key_event_raw_buffer);
     _key_event_buffer = convertToKeyEvent(_key_event_raw_buffer);
-    // mclog::tagDebug(_tag, "key event: ({}) {} {}", (int)_key_event_buffer.code, _key_event_buffer.name,
-    //                 _key_event_buffer.state);
+    bool fn_active = isFnActive();
+    mclog::tagDebug(_tag, "mapped event -> row:{}, col:{}, key:{}, code:{}, modifier_mask:0x{:02x}, fn:{}",
+                    _key_event_raw_buffer.row, _key_event_raw_buffer.col, _key_event_buffer.keyName ? _key_event_buffer.keyName : "", (int)_key_event_buffer.keyCode,
+                    _modifier_mask, fn_active);
     onKeyEvent.emit(_key_event_buffer);
 }
 
@@ -99,7 +101,38 @@ void Keyboard::remap(KeyEventRaw_t& key)
 
 void Keyboard::update_modifier_mask(const KeyEventRaw_t& key)
 {
-    // Check control key (3, 0)
+    // Read physical Fn state from TCA8418 (covers race where Fn press hasn't been processed yet)
+    // Fn remapped location is row=2,col=0. Original matrix coords: orig_row = col/2, orig_col = (col%2==0 ? row : row+4).
+    // For Fn at remapped (2,0) => orig_row = 0, orig_col = 2
+    if (_tca8418) {
+        uint8_t fn_orig_row = 0;
+        uint8_t fn_orig_col = 2;
+        uint8_t fn_row_pin = fn_orig_row; // TCA8418_ROW0 ..
+        uint8_t fn_col_pin = TCA8418_COL0 + fn_orig_col; // TCA8418_COL2 ..
+        uint8_t fn_row_val = _tca8418->digitalRead(fn_row_pin);
+        uint8_t fn_col_val = _tca8418->digitalRead(fn_col_pin);
+        bool fn_phys_pressed = (fn_row_val == TCA8418_LOW) || (fn_col_val == TCA8418_LOW);
+        mclog::tagDebug(_tag, "Fn physical state read: row_pin={}, col_pin={}, row_val={}, col_val={}, fn_phys={}", fn_row_pin, fn_col_pin, fn_row_val, fn_col_val, fn_phys_pressed);
+        if (fn_phys_pressed) {
+            _fn_pressed = true;
+            _fn_last_state = true;
+            _fn_last_ts = millis();
+        } else {
+            // do not clear _fn_pressed/_fn_last_state here to avoid races where
+            // physical read lags other events; explicit Fn release will clear state
+            mclog::tagDebug(_tag, "Fn physical not pressed (no clear) - waiting for explicit release or timeout");
+        }
+    }
+
+    // Fn key (user marked): remapped location observed at row=2,col=0
+    if (key.row == 2 && key.col == 0) {
+        _fn_pressed = key.state;
+        _fn_last_state = key.state;
+        _fn_last_ts = millis();
+        return; // Fn does not act as a normal modifier
+    }
+
+    // Check control key (row 4 pos 0 => index row=3 col=0)
     if (key.row == 3 && key.col == 0) {
         if (key.state) {
             _modifier_mask |= KEY_MOD_LCTRL;
@@ -108,16 +141,7 @@ void Keyboard::update_modifier_mask(const KeyEventRaw_t& key)
         }
     }
 
-    // Check shift key (2, 0)
-    if (key.row == 2 && key.col == 0) {
-        if (key.state) {
-            _modifier_mask |= KEY_MOD_LSHIFT;
-        } else {
-            _modifier_mask &= ~KEY_MOD_LSHIFT;
-        }
-    }
-
-    // Treat capslock key (2, 1) as another shift
+    // Shift keys: keep Aa at (row=2,col=1) as shift
     if (key.row == 2 && key.col == 1) {
         if (key.state) {
             _modifier_mask |= KEY_MOD_LSHIFT;
@@ -125,6 +149,18 @@ void Keyboard::update_modifier_mask(const KeyEventRaw_t& key)
             _modifier_mask &= ~KEY_MOD_LSHIFT;
         }
     }
+
+    // Windows / Meta / Opt key: row 4 pos 1 => row=3,col=1
+    if (key.row == 3 && key.col == 1) {
+        if (key.state) {
+            _modifier_mask |= KEY_MOD_LMETA;
+        } else {
+            _modifier_mask &= ~KEY_MOD_LMETA;
+        }
+    }
+
+    // If multiple shift positions exist, add them here (e.g., right shift)
+    // (row=2,col=0 is Fn now and not treated as shift)
 }
 
 struct KeyValue_t {
@@ -197,6 +233,65 @@ Keyboard::KeyEvent_t Keyboard::convertToKeyEvent(const KeyEventRaw_t& key)
 
     ret.state = key.state;
 
+    // If this is the Fn key itself, always emit no key (modifier only)
+    // This ensures release events are not treated as Shift
+    if (key.row == 2 && key.col == 0) {
+        ret.keyCode = KEY_NONE;
+        ret.keyName = "Fn";
+        ret.isModifier = false;
+        return ret;
+    }
+
+    // Fn-layer overrides (treat recent Fn press within short window as active to avoid race conditions)
+    bool fn_active = isFnActive();
+    if (fn_active) {        // If Fn is held, map special keys as requested
+        // row/col are zero-based indices in _key_value_map
+        if (key.row == 3 && key.col == 0) { // row 4 pos 0 => ESC
+            ret.keyCode = KEY_ESC;
+            ret.keyName = "Esc";
+            ret.isModifier = false;
+            return ret;
+        }
+        if (key.row == 3 && key.col == 13) { // row 4 pos 13 => Delete
+            ret.keyCode = KEY_DELETE;
+            ret.keyName = "Del";
+            ret.isModifier = false;
+            return ret;
+        }
+        // Observed physical positions for arrows (mapped to ; . , / etc.)
+        if (key.row == 3 && key.col == 10) { // observed -> Left
+            ret.keyCode = KEY_LEFT;
+            ret.keyName = "Left";
+            ret.isModifier = false;
+            return ret;
+        }
+        if (key.row == 3 && key.col == 11) { // observed -> Down
+            ret.keyCode = KEY_DOWN;
+            ret.keyName = "Down";
+            ret.isModifier = false;
+            return ret;
+        }
+        if (key.row == 3 && key.col == 12) { // observed -> Right
+            ret.keyCode = KEY_RIGHT;
+            ret.keyName = "Right";
+            ret.isModifier = false;
+            return ret;
+        }
+        if (key.row == 2 && key.col == 11) { // observed -> Up
+            ret.keyCode = KEY_UP;
+            ret.keyName = "Up";
+            ret.isModifier = false;
+            return ret;
+        }
+        // If Fn held and key itself is the Fn key, emit no key (modifier only)
+        if (key.row == 2 && key.col == 0) {
+            ret.keyCode = KEY_NONE;
+            ret.keyName = "Fn";
+            ret.isModifier = false;
+            return ret;
+        }
+    }
+
     // For letters: use shift/caps lock to determine case
     // For special characters: use shift to determine which symbol
     bool use_shifted_version = false;
@@ -213,8 +308,6 @@ Keyboard::KeyEvent_t Keyboard::convertToKeyEvent(const KeyEventRaw_t& key)
         use_shifted_version = (_modifier_mask & KEY_MOD_LSHIFT);
     }
 
-    // mclog::tagDebug(_tag, "modifier mask: {:08b} {}", _modifier_mask, use_shifted_version);
-
     if (use_shifted_version) {
         ret.keyCode = _key_value_map[key.row][key.col].secondKeyCode;
         ret.keyName = _key_value_map[key.row][key.col].secondName;
@@ -223,7 +316,7 @@ Keyboard::KeyEvent_t Keyboard::convertToKeyEvent(const KeyEventRaw_t& key)
         ret.keyName = _key_value_map[key.row][key.col].firstName;
     }
 
-    if (ret.keyCode == KEY_LEFTSHIFT || ret.keyCode == KEY_LEFTCTRL) {
+    if (ret.keyCode == KEY_LEFTSHIFT || ret.keyCode == KEY_LEFTCTRL || ret.keyCode == KEY_LEFTMETA) {
         ret.isModifier = true;
     } else {
         ret.isModifier = false;

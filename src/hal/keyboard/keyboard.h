@@ -56,10 +56,17 @@ private:
     uint8_t _modifier_mask     = 0;
     bool _capslock_state       = false;
     bool _is_capslock_locked   = false;
+    bool _fn_pressed           = false; // Fn layer active when true
+    bool _fn_last_state        = false; // last observed Fn state (for short debounce window)
+    unsigned long _fn_last_ts  = 0;     // millis of last Fn state change
     KeyEventRaw_t _key_event_raw_buffer;
     KeyEvent_t _key_event_buffer;
 
     KeyEventRaw_t get_key_event_raw(const uint8_t& eventRaw);
     void remap(KeyEventRaw_t& key);
     void update_modifier_mask(const KeyEventRaw_t& key);
+
+public:
+    inline bool isFnPressed() const { return _fn_pressed; }
+    inline bool isFnActive() { return _fn_pressed || (_fn_last_state && (millis() - _fn_last_ts < 100)); }
 };
