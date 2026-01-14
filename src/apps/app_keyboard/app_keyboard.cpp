@@ -12,6 +12,7 @@
 #include <mooncake_log.h>
 #include <assets.h>
 #include <esp_system.h>
+#include <hal/utils/ble_mouse_wrapper/ble_mouse_wrapper.h>
 
 using namespace mooncake;
 using namespace smooth_ui_toolkit;
@@ -72,17 +73,25 @@ void AppKeyboard::onRunning()
             if (keyboard_type == KeyboardSelectorMenu::KEYBOARD_TYPE_BLE) {
                 mclog::tagInfo(getAppInfo().name, "keyboard type selected: BLE");
                 init_ble_keyboard();
+                render_keyboard_interface();
+                _is_keyboard_active = true;
             } else if (keyboard_type == KeyboardSelectorMenu::KEYBOARD_TYPE_USB) {
                 mclog::tagInfo(getAppInfo().name, "keyboard type selected: USB");
                 init_usb_keyboard();
+                render_keyboard_interface();
+                _is_keyboard_active = true;
+            } else if (keyboard_type == KeyboardSelectorMenu::KEYBOARD_TYPE_TIKTOK) {
+                mclog::tagInfo(getAppInfo().name, "keyboard type selected: TikTok Controller");
+                init_tiktok_controller();
+                _is_tiktok_mode = true;
             }
-
-            render_keyboard_interface();
-            _is_keyboard_active = true;
         }
     } else if (_is_keyboard_active) {
         // Update connection info periodically
         update_connection_info();
+    } else if (_is_tiktok_mode) {
+        // Update TikTok controller
+        update_tiktok_controller();
     }
 
     // Close app when home button clicked
@@ -91,6 +100,9 @@ void AppKeyboard::onRunning()
             _show_restart_confirm = true;
             _restart_confirm_choice = 0;
             _restart_confirm_dirty = true;
+        } else if (_is_tiktok_mode) {
+            // Just close the app for TikTok mode
+            close();
         } else {
             close();
         }
@@ -285,5 +297,172 @@ void AppKeyboard::update_restart_confirm()
 
     if (changed) {
         render_restart_confirm();
+    }
+}
+
+void AppKeyboard::init_tiktok_controller()
+{
+    mclog::tagInfo(getAppInfo().name, "initializing TikTok controller");
+    GetHAL().bleMouseInitWithName("TikTok Remote");
+    _tiktok_mouse_positioned = false;
+    _last_mouse_connected = false;
+    render_tiktok_interface();
+}
+
+void AppKeyboard::render_tiktok_interface()
+{
+    auto& canvas = GetHAL().canvas;
+    canvas.fillScreen(THEME_COLOR_BG);
+    canvas.setTextColor(TFT_MAGENTA, THEME_COLOR_BG);
+    canvas.setCursor(0, 0);
+    canvas.setTextSize(1);
+    canvas.println("[TikTok Controller]");
+
+    canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
+    canvas.println("");
+    canvas.println("UP: Swipe Up (Next)");
+    canvas.println("DOWN: Swipe Down (Prev)");
+    canvas.println("LEFT/RIGHT: Swipe L/R");
+    canvas.println("ENTER: Like");
+    canvas.println("SPACE: Pause");
+    canvas.println("HOME: Center");
+    canvas.println("");
+
+    bool mouse_connected = GetHAL().bleMouseIsConnected();
+    if (mouse_connected) {
+        canvas.setTextColor(TFT_GREEN, THEME_COLOR_BG);
+        canvas.println("BLE Mouse: Connected");
+        if (_tiktok_mouse_positioned) {
+            canvas.setTextColor(TFT_CYAN, THEME_COLOR_BG);
+            canvas.println("Cursor: Ready");
+        }
+    } else {
+        canvas.setTextColor(TFT_RED, THEME_COLOR_BG);
+        canvas.println("BLE Mouse: Waiting...");
+        canvas.setTextColor(TFT_YELLOW, THEME_COLOR_BG);
+        canvas.printf("Pair: %s\\n", GetHAL().getBleMouseName().c_str());
+    }
+
+    canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+    canvas.printf("MAC: %s", GetHAL().getBleMacString().c_str());
+
+    GetHAL().pushCanvas();
+}
+
+void AppKeyboard::update_tiktok_controller()
+{
+    bool mouse_connected = GetHAL().bleMouseIsConnected();
+
+    // Check if connection status changed
+    if (mouse_connected != _last_mouse_connected) {
+        _last_mouse_connected = mouse_connected;
+        
+        if (mouse_connected && !_tiktok_mouse_positioned) {
+            // Move cursor to top-left corner first
+            mclog::tagInfo(getAppInfo().name, "TikTok: positioning cursor to top-left");
+            GetHAL().bleMouseMove(-9999, -9999);
+            delay(50);
+            // Then move 200 points down and right to be in work area
+            mclog::tagInfo(getAppInfo().name, "TikTok: moving cursor to work area (+200, +200)");
+            GetHAL().bleMouseMove(200, 200);
+            _tiktok_mouse_positioned = true;
+        }
+        
+        render_tiktok_interface();
+    }
+
+    // Update UI periodically
+    if (GetHAL().millis() - _info_update_time > 1000) {
+        render_tiktok_interface();
+        _info_update_time = GetHAL().millis();
+    }
+
+    auto event = GetHAL().keyboard.getLatestKeyEventRaw();
+    
+    // No key event
+    if (event.row == 0 && event.col == 0) {
+        return;
+    }
+
+    if (!mouse_connected) {
+        return;
+    }
+
+    if (event.state) {
+        // Key pressed - simulate swipe by pressing and dragging
+        // Up arrow (row=2, col=11)
+        if (event.row == 2 && event.col == 11) {
+            mclog::tagInfo(getAppInfo().name, "TikTok: swipe up (next video)");
+            GetHAL().bleMousePress(MOUSE_LEFT);
+            delay(20);
+            GetHAL().bleMouseMove(0, -200);
+            delay(20);
+            GetHAL().bleMouseRelease(MOUSE_LEFT);
+            // Return cursor to original position
+            delay(20);
+            GetHAL().bleMouseMove(0, 200);
+        }
+        // Down arrow (row=3, col=11)
+        else if (event.row == 3 && event.col == 11) {
+            mclog::tagInfo(getAppInfo().name, "TikTok: swipe down (prev video)");
+            GetHAL().bleMousePress(MOUSE_LEFT);
+            delay(20);
+            GetHAL().bleMouseMove(0, 200);
+            delay(20);
+            GetHAL().bleMouseRelease(MOUSE_LEFT);
+            // Return cursor to original position
+            delay(20);
+            GetHAL().bleMouseMove(0, -200);
+        }
+        // Left arrow (row=3, col=10)
+        else if (event.row == 3 && event.col == 10) {
+            mclog::tagInfo(getAppInfo().name, "TikTok: swipe left");
+            GetHAL().bleMousePress(MOUSE_LEFT);
+            delay(20);
+            GetHAL().bleMouseMove(-200, 0);
+            delay(20);
+            GetHAL().bleMouseRelease(MOUSE_LEFT);
+            // Return cursor to original position
+            delay(20);
+            GetHAL().bleMouseMove(200, 0);
+        }
+        // Right arrow (row=3, col=12)
+        else if (event.row == 3 && event.col == 12) {
+            mclog::tagInfo(getAppInfo().name, "TikTok: swipe right");
+            GetHAL().bleMousePress(MOUSE_LEFT);
+            delay(20);
+            GetHAL().bleMouseMove(200, 0);
+            delay(20);
+            GetHAL().bleMouseRelease(MOUSE_LEFT);
+            // Return cursor to original position
+            delay(20);
+            GetHAL().bleMouseMove(-200, 0);
+        }
+        // Enter key (row=2, col=13) - double click for like
+        else if (event.row == 2 && event.col == 13) {
+            mclog::tagInfo(getAppInfo().name, "TikTok: double click (like)");
+            GetHAL().bleMousePress(MOUSE_LEFT);
+            delay(20);
+            GetHAL().bleMouseRelease(MOUSE_LEFT);
+            delay(50);
+            GetHAL().bleMousePress(MOUSE_LEFT);
+            delay(20);
+            GetHAL().bleMouseRelease(MOUSE_LEFT);
+        }
+        // row=3, col=13 — пауза (ПКМ)
+        else if (event.row == 3 && event.col == 13) {
+            mclog::tagInfo(getAppInfo().name, "TikTok: pause (right click)");
+            GetHAL().bleMousePress(MOUSE_RIGHT);
+            delay(20);
+            GetHAL().bleMouseRelease(MOUSE_RIGHT);
+        }
+        // row=2, col=12 — возврат курсора в центр
+        else if (event.row == 2 && event.col == 12) {
+            mclog::tagInfo(getAppInfo().name, "TikTok: move cursor to center");
+            // Пример: переместить в центр (400, 120) — подберите под ваш экран
+            GetHAL().bleMouseMove(-99999, -99999); // в левый верхний угол
+            delay(20);
+            GetHAL().bleMouseMove(400, 120); // смещение в центр
+        }
     }
 }
