@@ -64,68 +64,162 @@ void AppFileExplorer::onOpen()
 void AppFileExplorer::onRunning()
 {
     bool need_redraw = false;
+    bool key_handled = false;
     
-    if (_mode == Mode::BROWSER) {
-        // Navigation with keyboard
-        if (GetHAL().keyboard.isPressed("up")) {
-            audio::play_random_tone();
-            if (_selected_index > 0) {
-                _selected_index--;
-                if (_selected_index < _scroll_offset) {
-                    _scroll_offset = _selected_index;
+    // Handle raw key events for arrow keys (without Fn)
+    auto raw = GetHAL().keyboard.getLatestKeyEventRaw();
+    if (raw.state) {
+        if (_mode == Mode::BROWSER) {
+            // Up arrow: row=2, col=11
+            if (raw.row == 2 && raw.col == 11) {
+                audio::play_random_tone();
+                if (_selected_index > 0) {
+                    _selected_index--;
+                    if (_selected_index < _scroll_offset) {
+                        _scroll_offset = _selected_index;
+                    }
+                    need_redraw = true;
                 }
-                need_redraw = true;
+                key_handled = true;
+                GetHAL().delay(150);
             }
-            GetHAL().delay(150);
-        }
-        else if (GetHAL().keyboard.isPressed("down")) {
-            audio::play_random_tone();
-            if (_selected_index < (int)_file_list.size() - 1) {
-                _selected_index++;
-                if (_selected_index >= _scroll_offset + k_visible_items) {
-                    _scroll_offset = _selected_index - k_visible_items + 1;
+            // Down arrow: row=3, col=11
+            else if (raw.row == 3 && raw.col == 11) {
+                audio::play_random_tone();
+                if (_selected_index < (int)_file_list.size() - 1) {
+                    _selected_index++;
+                    if (_selected_index >= _scroll_offset + k_visible_items) {
+                        _scroll_offset = _selected_index - k_visible_items + 1;
+                    }
+                    need_redraw = true;
                 }
-                need_redraw = true;
+                key_handled = true;
+                GetHAL().delay(150);
             }
-            GetHAL().delay(150);
-        }
-        else if (GetHAL().keyboard.isPressed("enter") || GetHAL().keyboard.isPressed("ok")) {
-            audio::play_random_tone();
-            open_selected_item();
-            need_redraw = true;
-            GetHAL().delay(200);
-        }
-        else if (GetHAL().keyboard.isPressed("esc") || GetHAL().keyboard.isPressed("back")) {
-            audio::play_random_tone();
-            go_back();
-            need_redraw = true;
-            GetHAL().delay(200);
+            // Left arrow: row=3, col=10 - go up directory
+            else if (raw.row == 3 && raw.col == 10) {
+                audio::play_random_tone();
+                go_back();
+                need_redraw = true;
+                key_handled = true;
+                GetHAL().delay(200);
+            }
+            // Enter: row=2, col=13
+            else if (raw.row == 2 && raw.col == 13) {
+                audio::play_random_tone();
+                open_selected_item();
+                need_redraw = true;
+                key_handled = true;
+                GetHAL().delay(200);
+            }
+        } else if (_mode == Mode::VIEWER) {
+            // Up arrow: row=2, col=11
+            if (raw.row == 2 && raw.col == 11) {
+                audio::play_random_tone();
+                if (_viewer_scroll > 0) {
+                    _viewer_scroll--;
+                    need_redraw = true;
+                }
+                key_handled = true;
+                GetHAL().delay(150);
+            }
+            // Down arrow: row=3, col=11
+            else if (raw.row == 3 && raw.col == 11) {
+                audio::play_random_tone();
+                int max_scroll = (int)_file_content.size() - k_visible_items;
+                if (_viewer_scroll < max_scroll && max_scroll > 0) {
+                    _viewer_scroll++;
+                    need_redraw = true;
+                }
+                key_handled = true;
+                GetHAL().delay(150);
+            }
+            // Left arrow: row=3, col=10 - exit viewer
+            else if (raw.row == 3 && raw.col == 10) {
+                audio::play_random_tone();
+                _mode = Mode::BROWSER;
+                need_redraw = true;
+                key_handled = true;
+                GetHAL().delay(200);
+            }
         }
     }
-    else if (_mode == Mode::VIEWER) {
-        // Scroll file content
-        if (GetHAL().keyboard.isPressed("up")) {
-            audio::play_random_tone();
-            if (_viewer_scroll > 0) {
-                _viewer_scroll--;
-                need_redraw = true;
+    
+    // Handle regular key events (only if not already handled by raw)
+    auto key_event = GetHAL().keyboard.getLatestKeyEvent();
+    if (key_event.state && !key_handled) {
+        if (_mode == Mode::BROWSER) {
+            switch (key_event.keyCode) {
+                case KEY_UP:
+                    audio::play_random_tone();
+                    if (_selected_index > 0) {
+                        _selected_index--;
+                        if (_selected_index < _scroll_offset) {
+                            _scroll_offset = _selected_index;
+                        }
+                        need_redraw = true;
+                    }
+                    GetHAL().delay(150);
+                    break;
+                case KEY_DOWN:
+                    audio::play_random_tone();
+                    if (_selected_index < (int)_file_list.size() - 1) {
+                        _selected_index++;
+                        if (_selected_index >= _scroll_offset + k_visible_items) {
+                            _scroll_offset = _selected_index - k_visible_items + 1;
+                        }
+                        need_redraw = true;
+                    }
+                    GetHAL().delay(150);
+                    break;
+                case KEY_LEFT:
+                case KEY_ESC:
+                case KEY_BACKSPACE:
+                    audio::play_random_tone();
+                    go_back();
+                    need_redraw = true;
+                    GetHAL().delay(200);
+                    break;
+                case KEY_ENTER:
+                    audio::play_random_tone();
+                    open_selected_item();
+                    need_redraw = true;
+                    GetHAL().delay(200);
+                    break;
+                default:
+                    break;
             }
-            GetHAL().delay(150);
-        }
-        else if (GetHAL().keyboard.isPressed("down")) {
-            audio::play_random_tone();
-            int max_scroll = (int)_file_content.size() - k_visible_items;
-            if (_viewer_scroll < max_scroll && max_scroll > 0) {
-                _viewer_scroll++;
-                need_redraw = true;
+        } else if (_mode == Mode::VIEWER) {
+            switch (key_event.keyCode) {
+                case KEY_UP:
+                    audio::play_random_tone();
+                    if (_viewer_scroll > 0) {
+                        _viewer_scroll--;
+                        need_redraw = true;
+                    }
+                    GetHAL().delay(150);
+                    break;
+                case KEY_DOWN: {
+                    audio::play_random_tone();
+                    int max_scroll = (int)_file_content.size() - k_visible_items;
+                    if (_viewer_scroll < max_scroll && max_scroll > 0) {
+                        _viewer_scroll++;
+                        need_redraw = true;
+                    }
+                    GetHAL().delay(150);
+                    break;
+                }
+                case KEY_LEFT:
+                case KEY_ESC:
+                case KEY_BACKSPACE:
+                    audio::play_random_tone();
+                    _mode = Mode::BROWSER;
+                    need_redraw = true;
+                    GetHAL().delay(200);
+                    break;
+                default:
+                    break;
             }
-            GetHAL().delay(150);
-        }
-        else if (GetHAL().keyboard.isPressed("esc") || GetHAL().keyboard.isPressed("back")) {
-            audio::play_random_tone();
-            _mode = Mode::BROWSER;
-            need_redraw = true;
-            GetHAL().delay(200);
         }
     }
     
@@ -202,81 +296,73 @@ void AppFileExplorer::list_directory(const std::string& path)
 void AppFileExplorer::render_browser()
 {
     GetHAL().canvas.fillScreen(THEME_COLOR_BG);
+    GetHAL().canvas.setFont(FONT_REPL);
+    GetHAL().canvas.setTextSize(1);
     
-    // Draw title bar
-    GetHAL().canvas.setTextColor(TFT_ORANGE);
-    GetHAL().canvas.setCursor(2, 2);
-    
-    // Truncate path if too long
+    // Header: show path
+    GetHAL().canvas.setTextColor(TFT_ORANGE, THEME_COLOR_BG);
+    GetHAL().canvas.setCursor(2, 0);
     std::string display_path = _current_path;
-    if (display_path.length() > 25) {
-        display_path = "..." + display_path.substr(display_path.length() - 22);
+    if (display_path.length() > 30) {
+        display_path = "..." + display_path.substr(display_path.length() - 27);
     }
-    GetHAL().canvas.printf("Path: %s", display_path.c_str());
+    GetHAL().canvas.print(display_path.c_str());
     
-    // Draw separator
-    GetHAL().canvas.drawLine(0, 11, GetHAL().canvas.width(), 11, TFT_DARKGREY);
+    // List items
+    const int start_y = 12;
+    const int line_h = 12;
     
-    // Draw file list
-    int y = 14;
     for (int i = 0; i < k_visible_items && (i + _scroll_offset) < (int)_file_list.size(); i++) {
-        int item_index = i + _scroll_offset;
-        const FileItem& item = _file_list[item_index];
+        int idx = i + _scroll_offset;
+        const FileItem& item = _file_list[idx];
+        int y = start_y + i * line_h;
         
-        // Highlight selected item
-        if (item_index == _selected_index) {
-            GetHAL().canvas.fillRect(0, y - 1, GetHAL().canvas.width(), k_item_height, TFT_DARKGREY);
+        // Selected item highlight
+        if (idx == _selected_index) {
+            GetHAL().canvas.fillRect(0, y, GetHAL().canvas.width() - 4, line_h, TFT_CYAN);
+            GetHAL().canvas.setTextColor(TFT_BLACK, TFT_CYAN);
+        } else {
+            GetHAL().canvas.setTextColor(item.is_directory ? TFT_CYAN : TFT_WHITE, THEME_COLOR_BG);
         }
         
-        // Draw icon and name
-        GetHAL().canvas.setCursor(4, y + 2);
+        GetHAL().canvas.setCursor(2, y + 2);
         
         if (item.is_directory) {
-            GetHAL().canvas.setTextColor(TFT_CYAN);
-            GetHAL().canvas.print("[");
-            
-            // Truncate long names
-            std::string display_name = item.name;
-            if (display_name.length() > 20) {
-                display_name = display_name.substr(0, 17) + "...";
-            }
-            GetHAL().canvas.print(display_name.c_str());
-            GetHAL().canvas.print("]");
+            std::string name = "[" + item.name + "]";
+            if (name.length() > 28) name = name.substr(0, 25) + "...]";
+            GetHAL().canvas.print(name.c_str());
         } else {
-            GetHAL().canvas.setTextColor(TFT_WHITE);
+            std::string name = item.name;
+            if (name.length() > 22) name = name.substr(0, 19) + "...";
+            GetHAL().canvas.print(name.c_str());
             
-            // Truncate long names and show size
-            std::string display_name = item.name;
-            if (display_name.length() > 16) {
-                display_name = display_name.substr(0, 13) + "...";
-            }
-            GetHAL().canvas.print(display_name.c_str());
-            
-            // Show file size
-            GetHAL().canvas.setTextColor(TFT_DARKGREY);
+            // File size on right
+            char size_buf[16];
             if (item.size < 1024) {
-                GetHAL().canvas.printf(" %dB", item.size);
+                snprintf(size_buf, sizeof(size_buf), " %dB", (int)item.size);
             } else if (item.size < 1024 * 1024) {
-                GetHAL().canvas.printf(" %.1fK", item.size / 1024.0f);
+                snprintf(size_buf, sizeof(size_buf), " %.1fK", item.size / 1024.0f);
             } else {
-                GetHAL().canvas.printf(" %.1fM", item.size / (1024.0f * 1024.0f));
+                snprintf(size_buf, sizeof(size_buf), " %.1fM", item.size / (1024.0f * 1024.0f));
             }
+            if (idx == _selected_index) {
+                GetHAL().canvas.setTextColor(TFT_DARKGREY, TFT_CYAN);
+            } else {
+                GetHAL().canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+            }
+            GetHAL().canvas.print(size_buf);
         }
-        
-        y += k_item_height;
     }
     
-    // Draw scrollbar if needed
+    // Scrollbar
     if ((int)_file_list.size() > k_visible_items) {
-        int scrollbar_height = k_visible_items * k_item_height;
-        int thumb_height = (k_visible_items * scrollbar_height) / _file_list.size();
-        int thumb_pos = (_scroll_offset * scrollbar_height) / _file_list.size();
+        int bar_x = GetHAL().canvas.width() - 2;
+        int bar_h = k_visible_items * line_h;
+        int thumb_h = std::max(4, (k_visible_items * bar_h) / (int)_file_list.size());
+        int thumb_y = start_y + (_scroll_offset * bar_h) / (int)_file_list.size();
         
-        GetHAL().canvas.drawLine(GetHAL().canvas.width() - 2, 14, 
-                                 GetHAL().canvas.width() - 2, 14 + scrollbar_height, 
-                                 TFT_DARKGREY);
-        GetHAL().canvas.fillRect(GetHAL().canvas.width() - 3, 14 + thumb_pos, 
-                                3, thumb_height, TFT_CYAN);
+        GetHAL().canvas.drawFastVLine(bar_x, start_y, bar_h, TFT_DARKGREY);
+        GetHAL().canvas.fillRect(bar_x - 1, thumb_y, 3, thumb_h, TFT_WHITE);
     }
     
     GetHAL().pushCanvas();

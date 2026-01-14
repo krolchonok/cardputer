@@ -179,6 +179,9 @@ void AppIrMenu::onOpen()
     if (_remote_app_id >= 0) {
         options.push_back({_remote_app_id, "Remote", _remote_app_icon});
     }
+    if (_irfiles_app_id >= 0) {
+        options.push_back({_irfiles_app_id, "IR Files", _irfiles_app_icon});
+    }
     if (_stringir_app_id >= 0) {
         options.push_back({_stringir_app_id, "StringIR", _stringir_app_icon});
     }
@@ -233,6 +236,8 @@ void AppIrMenu::resolve_app_ids()
 {
     _remote_app_id       = -1;
     _remote_app_icon     = nullptr;
+    _irfiles_app_id      = -1;
+    _irfiles_app_icon    = nullptr;
     _stringir_app_id     = -1;
     _stringir_app_icon   = nullptr;
 
@@ -242,6 +247,9 @@ void AppIrMenu::resolve_app_ids()
         if (app->getAppInfo().name == "Remote") {
             _remote_app_id = app->getId();
             _remote_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
+        } else if (app->getAppInfo().name == "IR Files") {
+            _irfiles_app_id = app->getId();
+            _irfiles_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
         } else if (app->getAppInfo().name == "StringIR") {
             _stringir_app_id = app->getId();
             _stringir_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);

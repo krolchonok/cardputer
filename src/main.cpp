@@ -34,6 +34,7 @@ void setup()
     GetMooncake().installApp(std::make_unique<Launcher>());
     GetMooncake().installApp(std::make_unique<AppWifiMenu>());
     GetMooncake().installApp(std::make_unique<AppIrMenu>());
+    GetMooncake().installApp(std::make_unique<AppIrFiles>());
     GetMooncake().installApp(std::make_unique<AppToolsMenu>());
     GetMooncake().installApp(std::make_unique<AppWifiScan>());
     GetMooncake().installApp(std::make_unique<AppRecord>());
@@ -48,6 +49,7 @@ void setup()
     GetMooncake().installApp(std::make_unique<AppImu>());
     GetMooncake().installApp(std::make_unique<AppSdcard>());
     GetMooncake().installApp(std::make_unique<AppFileExplorer>());
+    GetMooncake().installApp(std::make_unique<AppUsbStorage>());
     GetMooncake().installApp(std::make_unique<AppStringIRToolKit>());
     // GetMooncake().installApp(std::make_unique<AppDummy>());
 

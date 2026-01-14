@@ -25,6 +25,8 @@ private:
 
     int _remote_app_id    = -1;
     AppIcon_t* _remote_app_icon = nullptr;
+    int _irfiles_app_id   = -1;
+    AppIcon_t* _irfiles_app_icon = nullptr;
     int _stringir_app_id  = -1;
     AppIcon_t* _stringir_app_icon = nullptr;
     int _child_app_id     = -1;

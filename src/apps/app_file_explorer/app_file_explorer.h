@@ -45,7 +45,7 @@ private:
     int _viewer_scroll;
     
     static constexpr int k_visible_items = 8;
-    static constexpr int k_item_height = 13;
+    static constexpr int k_item_height = 12;
     
     void list_directory(const std::string& path);
     void render_browser();
