@@ -21,6 +21,7 @@ public:
         KEYBOARD_TYPE_NONE = 0,
         KEYBOARD_TYPE_BLE,
         KEYBOARD_TYPE_USB,
+        KEYBOARD_TYPE_TIKTOK,
     };
 
     void init();
@@ -67,10 +68,16 @@ private:
     bool _restart_confirm_dirty          = false;
     int _restart_confirm_choice          = 0;
     KeyboardSelectorMenu* _selector_menu = nullptr;
+    bool _is_tiktok_mode                 = false;
+    bool _tiktok_mouse_positioned        = false;
+    bool _last_mouse_connected           = false;
 
     void select_keyboard_type();
     void init_ble_keyboard();
     void init_usb_keyboard();
+    void init_tiktok_controller();
+    void update_tiktok_controller();
+    void render_tiktok_interface();
     void update_connection_info();
     void render_keyboard_interface();
     void render_connection_status();
