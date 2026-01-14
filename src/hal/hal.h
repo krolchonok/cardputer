@@ -138,6 +138,17 @@ public:
     /* ----------------------------------- Cap ---------------------------------- */
     CapLoRa868 capLora868;
 
+    /* ----------------------------------- BLE Mouse ---------------------------------- */
+    void bleMouseInit();
+    void bleMouseInitWithName(const std::string& deviceName);
+    void bleMouseDeinit();
+    bool bleMouseIsConnected() const;
+    void bleMousePress(uint8_t button);
+    void bleMouseRelease(uint8_t button);
+    void bleMouseMove(int x, int y);
+    void bleMouseCenterCursor();
+    const std::string& getBleMouseName() const;
+
 private:
     static constexpr int k_canvas_width_with_bar = 204;
     static constexpr int k_canvas_height = 109;
@@ -149,6 +160,7 @@ private:
     bool _is_ir_inited              = false;
     bool _is_ble_keyboard_inited    = false;
     bool _is_usb_keyboard_inited    = false;
+    bool _is_ble_mouse_inited       = false;
     bool _is_sd_card_mounted        = false;
     int _ble_keyboard_event_slot_id = -1;
     int _usb_keyboard_event_slot_id = -1;

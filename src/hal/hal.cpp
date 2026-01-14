@@ -1170,3 +1170,75 @@ Hal::SdCardProbeResult_t Hal::sdCardProbe()
     return result;
 }
 #endif
+
+/* -------------------------------------------------------------------------- */
+/*                                   BLE Mouse                                */
+/* -------------------------------------------------------------------------- */
+#include <hal/utils/ble_mouse_wrapper/ble_mouse_wrapper.h>
+
+static BleMouseWrapper* bleMouse = nullptr; // BLE Mouse instance
+
+void Hal::bleMouseInit() {
+    bleMouseInitWithName("CardputerMouse");
+}
+
+void Hal::bleMouseInitWithName(const std::string& deviceName) {
+    if (_is_ble_mouse_inited) {
+        mclog::tagWarn(_tag, "BLE Mouse already initialized");
+        return;
+    }
+    bleMouse = new BleMouseWrapper(deviceName);
+    bleMouse->begin();
+    _is_ble_mouse_inited = true;
+    mclog::tagInfo(_tag, "BLE Mouse initialized with name: {}", deviceName);
+}
+
+void Hal::bleMouseDeinit() {
+    if (!_is_ble_mouse_inited || !bleMouse) {
+        return;
+    }
+    bleMouse->end();
+    delete bleMouse;
+    bleMouse = nullptr;
+    _is_ble_mouse_inited = false;
+    mclog::tagInfo(_tag, "BLE Mouse deinitialized");
+}
+
+bool Hal::bleMouseIsConnected() const {
+    if (!_is_ble_mouse_inited || !bleMouse) {
+        return false;
+    }
+    return bleMouse->isConnected();
+}
+
+void Hal::bleMousePress(uint8_t button) {
+    if (bleMouse) {
+        bleMouse->press(button);
+    }
+}
+
+void Hal::bleMouseRelease(uint8_t button) {
+    if (bleMouse) {
+        bleMouse->release(button);
+    }
+}
+
+void Hal::bleMouseMove(int x, int y) {
+    if (bleMouse) {
+        bleMouse->move(x, y);
+    }
+}
+
+void Hal::bleMouseCenterCursor() {
+    if (bleMouse) {
+        bleMouse->move(-99999, -99999);
+    }
+}
+
+const std::string& Hal::getBleMouseName() const {
+    static const std::string empty;
+    if (bleMouse) {
+        return bleMouse->getDeviceName();
+    }
+    return empty;
+}
