@@ -93,21 +93,23 @@ void AppUsbStorage::render()
         GetHAL().canvas.setCursor(5, 75);
 
         if (_msc_active) {
-            GetHAL().canvas.setTextColor(TFT_ORANGE, THEME_COLOR_BG);
-            GetHAL().canvas.println("[ NOT AVAILABLE ]");
-            GetHAL().canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+            GetHAL().canvas.setTextColor(TFT_GREEN, THEME_COLOR_BG);
+            GetHAL().canvas.println("[ ACTIVE ]");
+            GetHAL().canvas.setTextColor(TFT_YELLOW, THEME_COLOR_BG);
             GetHAL().canvas.setCursor(5, 90);
-            GetHAL().canvas.println("Requires custom build");
+            GetHAL().canvas.println("SD card exposed to PC");
+            GetHAL().canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
             GetHAL().canvas.setCursor(5, 105);
-            GetHAL().canvas.println("Remove & read SD externally");
+            GetHAL().canvas.println("Press ENTER to disable");
         } else {
             GetHAL().canvas.setTextColor(TFT_ORANGE, THEME_COLOR_BG);
-            GetHAL().canvas.println("[ NOT AVAILABLE ]");
-            GetHAL().canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+            GetHAL().canvas.println("[ INACTIVE ]");
+            GetHAL().canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
             GetHAL().canvas.setCursor(5, 90);
-            GetHAL().canvas.println("Arduino limitation");
+            GetHAL().canvas.println("Press ENTER to enable");
+            GetHAL().canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
             GetHAL().canvas.setCursor(5, 105);
-            GetHAL().canvas.println("Use external SD reader");
+            GetHAL().canvas.println("USB MSC mode");
         }
     }
 

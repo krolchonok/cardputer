@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 #include "usb_msc_helper.h"
-#include <usb_msc_device.h>
+#include "usb_msc_device.h"
 #include <mooncake_log.h>
 
 static const char* TAG = "usb_msc";

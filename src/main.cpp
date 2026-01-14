@@ -51,6 +51,7 @@ void setup()
     GetMooncake().installApp(std::make_unique<AppFileExplorer>());
     GetMooncake().installApp(std::make_unique<AppUsbStorage>());
     GetMooncake().installApp(std::make_unique<AppStringIRToolKit>());
+    GetMooncake().installApp(std::make_unique<AppWebServer>());
     // GetMooncake().installApp(std::make_unique<AppDummy>());
 
     // Main loop

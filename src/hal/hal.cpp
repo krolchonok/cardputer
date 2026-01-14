@@ -19,6 +19,7 @@
 #include <WiFi.h>
 #include <SPI.h>
 #include <SD.h>
+#include <hal/utils/usb_msc/usb_msc_helper.h>
 #endif
 
 static std::unique_ptr<Hal> _hal_instance;
@@ -46,6 +47,12 @@ void Hal::init()
     keyboard_init();
     setting_init();
     spi_init();
+    
+    // Initialize USB MSC (for SD card Mass Storage Class support)
+    usb_msc_helper_init();
+    
+    // Attempt auto-connect to saved WiFi
+    wifiAutoConnect();
 }
 
 void Hal::update()
@@ -304,6 +311,39 @@ void Hal::wifiDisconnect()
     WiFi.disconnect();
     _is_wifi_connected = false;
     stop_sntp();
+}
+
+std::string Hal::getWifiIpAddress() const
+{
+    if (!_is_wifi_connected) {
+        return "";
+    }
+    return WiFi.localIP().toString().c_str();
+}
+
+std::string Hal::getWifiSsid() const
+{
+    if (!_is_wifi_connected) {
+        return "";
+    }
+    return WiFi.SSID().c_str();
+}
+
+void Hal::wifiAutoConnect()
+{
+    mclog::tagInfo(_tag, "wifi auto connect");
+
+    // Check if we have saved WiFi credentials
+    std::string saved_ssid = getSettings().GetString("wifi_ssid", "");
+    std::string saved_password = getSettings().GetString("wifi_password", "");
+
+    if (saved_ssid.empty() || saved_password.empty()) {
+        mclog::tagWarn(_tag, "no saved WiFi credentials found");
+        return;
+    }
+
+    mclog::tagInfo(_tag, "attempting auto connect to: {}", saved_ssid);
+    wifiConnect(saved_ssid, saved_password);
 }
 
 void Hal::start_sntp()
@@ -713,13 +753,71 @@ void Hal::espNowClearReceivedData()
 #if defined(ARDUINO)
 void Hal::irInit()
 {
-    mclog::tagWarn(_tag, "ir not supported in this Arduino port");
+    mclog::tagInfo(_tag, "ir init on pin %d", HAL_PIN_IR_TX);
+
+    if (_is_ir_inited) {
+        mclog::tagInfo(_tag, "ir already inited");
+        return;
+    }
+
+    // Configure GPIO pin for IR LED
+    pinMode(HAL_PIN_IR_TX, OUTPUT);
+    digitalWrite(HAL_PIN_IR_TX, LOW);
+    
+    _is_ir_inited = true;
 }
 
 void Hal::irSend(uint8_t addr, uint8_t cmd)
 {
-    (void)addr;
-    (void)cmd;
+    mclog::tagInfo(_tag, "ir send: addr: {:02X}, cmd: {:02X}", addr, cmd);
+
+    if (!_is_ir_inited) {
+        mclog::tagError(_tag, "ir not inited");
+        return;
+    }
+
+    // NEC format: 9ms leader + 4.5ms space + 32 bits data (LSB first)
+    // Bit order: address(8) + ~address(8) + command(8) + ~command(8)
+    // Each bit: 560us mark + (560us space for 0, 1690us space for 1)
+    
+    uint32_t data = addr | ((~addr & 0xFF) << 8) | (cmd << 16) | ((~cmd & 0xFF) << 24);
+    
+    // Send leading pulse (9ms at 38kHz)
+    sendIRPulse(9000, 4500);
+    
+    // Send 32 bits LSB first
+    for (int i = 0; i < 32; i++) {
+        if (data & (1UL << i)) {
+            // Send bit 1: 560us mark + 1690us space
+            sendIRPulse(560, 1690);
+        } else {
+            // Send bit 0: 560us mark + 560us space
+            sendIRPulse(560, 560);
+        }
+    }
+    
+    // Send stop bit
+    sendIRPulse(560, 0);
+    
+    mclog::tagInfo(_tag, "ir code sent: 0x{:08X}", data);
+}
+
+void Hal::sendIRPulse(uint16_t markTime, uint16_t spaceTime)
+{
+    // Send mark (38kHz carrier ~26us period)
+    uint32_t endTime = micros() + markTime;
+    while (micros() < endTime) {
+        digitalWrite(HAL_PIN_IR_TX, HIGH);
+        delayMicroseconds(13);  // 38kHz = 26us period, 50% duty = 13us on
+        digitalWrite(HAL_PIN_IR_TX, LOW);
+        delayMicroseconds(13);
+    }
+    
+    // Send space
+    if (spaceTime > 0) {
+        digitalWrite(HAL_PIN_IR_TX, LOW);
+        delayMicroseconds(spaceTime);
+    }
 }
 
 #else

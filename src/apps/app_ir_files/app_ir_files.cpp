@@ -314,43 +314,92 @@ bool AppIrFiles::parse_ir_file(fs::File& file, std::vector<IrCommand>& out)
         auto lower = to_lower(line);
 
         if (lower.rfind("name:", 0) == 0) {
+            // Save previous command before starting new one
+            if (has_address && has_command && !current_name.empty()) {
+                out.push_back({current_name, address, command});
+                has_address  = false;
+                has_command  = false;
+            }
             current_name = trim(line.substr(line.find(':') + 1));
             continue;
         }
 
         if (lower.rfind("address:", 0) == 0) {
-            std::string token = first_token(line.substr(line.find(':') + 1));
-            if (!token.empty()) {
-                uint8_t value = 0;
-                if (parse_hex_byte(token, value)) {
-                    address     = value;
-                    has_address = true;
-                } else {
-                    parse_ok = false;
+            std::string rest = line.substr(line.find(':') + 1);
+            // Parse address bytes (could be "40 40 00 00" or just "40")
+            std::vector<uint8_t> addr_bytes;
+            std::string current_byte;
+            for (size_t i = 0; i < rest.length(); ++i) {
+                char c = rest[i];
+                if (c == ' ' || c == '\t') {
+                    if (!current_byte.empty()) {
+                        uint8_t byte_val = 0;
+                        if (parse_hex_byte(current_byte, byte_val)) {
+                            addr_bytes.push_back(byte_val);
+                        }
+                        current_byte.clear();
+                    }
+                } else if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+                    current_byte += c;
                 }
+            }
+            // Parse last byte
+            if (!current_byte.empty()) {
+                uint8_t byte_val = 0;
+                if (parse_hex_byte(current_byte, byte_val)) {
+                    addr_bytes.push_back(byte_val);
+                }
+            }
+            // Take first byte as address
+            if (!addr_bytes.empty()) {
+                address     = addr_bytes[0];
+                has_address = true;
+            } else {
+                parse_ok = false;
             }
             continue;
         }
 
         if (lower.rfind("command:", 0) == 0) {
-            std::string token = first_token(line.substr(line.find(':') + 1));
-            if (!token.empty()) {
-                uint8_t value = 0;
-                if (parse_hex_byte(token, value)) {
-                    command     = value;
-                    has_command = true;
-                } else {
-                    parse_ok = false;
+            std::string rest = line.substr(line.find(':') + 1);
+            // Parse command bytes (could be "18 E7 00 00" or just "18")
+            std::vector<uint8_t> cmd_bytes;
+            std::string current_byte;
+            for (size_t i = 0; i < rest.length(); ++i) {
+                char c = rest[i];
+                if (c == ' ' || c == '\t') {
+                    if (!current_byte.empty()) {
+                        uint8_t byte_val = 0;
+                        if (parse_hex_byte(current_byte, byte_val)) {
+                            cmd_bytes.push_back(byte_val);
+                        }
+                        current_byte.clear();
+                    }
+                } else if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+                    current_byte += c;
                 }
             }
+            // Parse last byte
+            if (!current_byte.empty()) {
+                uint8_t byte_val = 0;
+                if (parse_hex_byte(current_byte, byte_val)) {
+                    cmd_bytes.push_back(byte_val);
+                }
+            }
+            // Take first byte as command
+            if (!cmd_bytes.empty()) {
+                command     = cmd_bytes[0];
+                has_command = true;
+            } else {
+                parse_ok = false;
+            }
+            continue;
         }
+    }
 
-        if (has_address && has_command && !current_name.empty()) {
-            out.push_back({current_name, address, command});
-            has_address  = false;
-            has_command  = false;
-            current_name = "";
-        }
+    // Add last command if file ended without empty line
+    if (has_address && has_command && !current_name.empty()) {
+        out.push_back({current_name, address, command});
     }
 
     return parse_ok;

@@ -204,6 +204,22 @@ void AppSettingsMenu::onRunning()
         _menu->update();
     }
 
+    // Display WiFi info at the top of screen
+    GetHAL().canvasSystemBar.fillScreen(THEME_COLOR_BG);
+    GetHAL().canvasSystemBar.setTextSize(1);
+    GetHAL().canvasSystemBar.setTextColor(TFT_WHITE, THEME_COLOR_BG);
+    GetHAL().canvasSystemBar.setCursor(0, 0);
+    
+    if (GetHAL().isWifiConnected()) {
+        GetHAL().canvasSystemBar.setTextColor(TFT_GREEN, THEME_COLOR_BG);
+        GetHAL().canvasSystemBar.printf("WiFi: %s", GetHAL().getWifiIpAddress().c_str());
+    } else {
+        GetHAL().canvasSystemBar.setTextColor(TFT_ORANGE, THEME_COLOR_BG);
+        GetHAL().canvasSystemBar.printf("WiFi: Disconnected");
+    }
+    
+    GetHAL().pushCanvasSystemBar();
+
     if (GetHAL().homeButton.wasClicked()) {
         audio::play_random_tone();
         close();

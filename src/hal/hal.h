@@ -82,6 +82,9 @@ public:
         return _is_wifi_connected;
     }
     void wifiDisconnect();
+    std::string getWifiIpAddress() const;
+    std::string getWifiSsid() const;
+    void wifiAutoConnect();
 
     /* --------------------------------- EspNow --------------------------------- */
     void espNowInit();
@@ -181,6 +184,9 @@ private:
     void sd_card_init();
     void handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent);
     void handle_usb_keyboard_event(const Keyboard::KeyEvent_t& keyEvent);
+#if defined(ARDUINO)
+    void sendIRPulse(uint16_t markTime, uint16_t spaceTime);
+#endif
 };
 
 Hal& GetHAL();

@@ -26,3 +26,4 @@
 #include "app_settings_menu/app_settings_menu.h"
 #include "app_settings/app_settings.h"
 #include "app_display/app_display.h"
+#include "app_web_server/app_web_server.h"
