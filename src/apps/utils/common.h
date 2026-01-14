@@ -8,20 +8,9 @@
 
 #define FW_VERSION "V0.3"
 
-#define ANIM_APP_OPEN()                                                                                     \
-    for (int i = 10; i < 123; i += 8) {                                                                     \
-        GetHAL().canvas.fillSmoothCircle(GetHAL().canvas.width() / 2, GetHAL().canvas.height() / 2 - 10, i, \
-                                         THEME_COLOR_BG);                                                   \
-        GetHAL().pushCanvas();                                                                              \
-    }
+#define ANIM_APP_OPEN()
 
-#define ANIM_APP_CLOSE()                                                                                    \
-    for (int i = 123; i > 10; i -= 8) {                                                                     \
-        update_menu(true);                                                                                  \
-        GetHAL().canvas.fillSmoothCircle(GetHAL().canvas.width() / 2, GetHAL().canvas.height() / 2 - 10, i, \
-                                         THEME_COLOR_BG);                                                   \
-        GetHAL().pushCanvas();                                                                              \
-    }
+#define ANIM_APP_CLOSE()
 
 struct AppIcon_t {
 public:

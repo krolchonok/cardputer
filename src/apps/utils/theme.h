@@ -22,7 +22,20 @@
 #define ICON_MARGIN_TOP                     20
 #define ICON_TAG_MARGIN_TOP                 5
 #define ICON_SELECTED_WIDTH                 64
-#define FONT_BASIC                          &fonts::efontCN_16
+
+// Dynamic font based on settings
+inline const lgfx::IFont* get_current_font() {
+    int font_idx = GetHAL().getSettings().GetInt("disp_font", 0);
+    switch (font_idx) {
+        case 0: return &fonts::Font0;
+        case 1: return &fonts::Font2;
+        case 2: return &fonts::Font4;
+        case 3: return &fonts::efontCN_16;
+        default: return &fonts::Font0;
+    }
+}
+
+#define FONT_BASIC                          get_current_font()
 #define FONT_HEIGHT                         16
 
 #define THEME_COLOR_KB_CAPS_LOCK            TFT_SKYBLUE

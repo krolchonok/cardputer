@@ -7,10 +7,11 @@
 #include <mooncake.h>
 #include <cstdint>
 #include <hal/hal.h>
+#include <vector>
+#include <string>
 
 /**
- * @brief
- *
+ * @brief Voice recorder with SD card support
  */
 class AppRecord : public mooncake::AppAbility {
 public:
@@ -22,23 +23,34 @@ public:
     void onClose() override;
 
 private:
-    // 16000Hz采样率，1秒 = 16000个采样点，按200像素宽度分成80个缓冲区
-    static constexpr size_t RECORD_NUMBER       = 80;   // 16000/200 = 80个缓冲区，正好1秒
-    static constexpr size_t RECORD_LENGTH       = 200;  // 屏幕宽度
-    static constexpr size_t RECORD_SIZE         = RECORD_NUMBER * RECORD_LENGTH;
-    static constexpr size_t RECORD_SAMPLERATE   = 16000;
-    static constexpr size_t PLAYBACK_SAMPLERATE = 16000;
+    enum State {
+        STATE_IDLE,
+        STATE_RECORDING,
+        STATE_PLAYING,
+        STATE_FILE_LIST
+    };
 
-    uint32_t _time_count    = 0;
-    int16_t* _rec_data      = nullptr;
-    size_t _rec_record_idx  = 2;
-    size_t _draw_record_idx = 0;
-    bool _is_recording      = true;
+    static constexpr size_t BUFFER_SIZE = 256;
+    static constexpr size_t SAMPLE_RATE = 16000;
+    static constexpr size_t MAX_RECORD_SIZE = SAMPLE_RATE * 60; // 60 seconds max
 
-    void render_page_recording();
-    void render_page_playing();
-    void render_waveform();
-    void handle_enter_key();
+    State _state = STATE_IDLE;
+    std::vector<int16_t> _audio_buffer;
+    size_t _record_samples = 0;
+    uint32_t _record_start_time = 0;
+    uint32_t _last_update_time = 0;
+    std::vector<std::string> _saved_files;
+    int _selected_file_index = 0;
+    bool _sd_available = false;
+
+    void render_ui();
     void start_recording();
+    void stop_recording();
     void start_playback();
+    void stop_playback();
+    void save_to_sd();
+    void load_file_list();
+    void play_file(const std::string& filename);
+    void delete_file(const std::string& filename);
+    std::string get_timestamp_filename();
 };

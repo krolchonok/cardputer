@@ -28,6 +28,7 @@ void AppDisplay::onOpen()
     int32_t saved = GetHAL().getSettings().GetInt(k_setting_brightness, 10);
     _brightness   = static_cast<uint8_t>(std::clamp<int32_t>(saved, 0, 10));
     _indicators_enabled = GetHAL().getSettings().GetInt(k_setting_indicators, 1) != 0;
+    _font_index = GetHAL().getSettings().GetInt(k_setting_font, 0);
     uint8_t hw_brightness = static_cast<uint8_t>((_brightness * 255 + 5) / 10);
     GetHAL().display.setBrightness(hw_brightness);
     _key_event_slot_id = GetHAL().keyboard.onKeyEventRaw.connect(
@@ -76,6 +77,8 @@ void AppDisplay::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
     if (keyEvent.row == 3 && keyEvent.col == 10) {
         if (_selected_index == 0) {
             toggle_indicators();
+        } else if (_selected_index == 2) {
+            cycle_font();
         } else {
             adjust_brightness(-k_step);
         }
@@ -84,6 +87,8 @@ void AppDisplay::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
     if (keyEvent.row == 3 && keyEvent.col == 12) {
         if (_selected_index == 0) {
             toggle_indicators();
+        } else if (_selected_index == 2) {
+            cycle_font();
         } else {
             adjust_brightness(k_step);
         }
@@ -92,6 +97,8 @@ void AppDisplay::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
     if (keyEvent.row == 2 && keyEvent.col == 13) {
         if (_selected_index == 0) {
             toggle_indicators();
+        } else if (_selected_index == 2) {
+            cycle_font();
         }
         return;
     }
@@ -123,6 +130,13 @@ void AppDisplay::toggle_indicators()
     render_interface();
 }
 
+void AppDisplay::cycle_font()
+{
+    _font_index = (_font_index + 1) % 4;
+    GetHAL().getSettings().SetInt(k_setting_font, _font_index);
+    render_interface();
+}
+
 void AppDisplay::render_interface()
 {
     GetHAL().canvas.fillScreen(THEME_COLOR_BG);
@@ -150,6 +164,9 @@ void AppDisplay::render_interface()
             GetHAL().canvas.printf("Indicators: %s", _indicators_enabled ? "On" : "Off");
         } else if (i == 1) {
             GetHAL().canvas.printf("Brightness: %u", _brightness);
+        } else if (i == 2) {
+            const char* font_names[] = {"Font0", "Font2", "Font4", "efontCN"};
+            GetHAL().canvas.printf("Font: %s", font_names[_font_index]);
         }
     }
 

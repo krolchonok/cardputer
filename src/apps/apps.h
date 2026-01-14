@@ -20,6 +20,7 @@
 #include "app_keyboard/app_keyboard.h"
 #include "app_imu/app_imu.h"
 #include "app_sdcard/app_sdcard.h"
+#include "app_file_explorer/app_file_explorer.h"
 #include "app_settings_menu/app_settings_menu.h"
 #include "app_settings/app_settings.h"
 #include "app_display/app_display.h"

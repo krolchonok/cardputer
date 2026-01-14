@@ -43,6 +43,7 @@ void Launcher::onRunning()
         // If running app is closed
         if (GetMooncake().getAppCurrentState(_data.running_app_id) == AppAbility::StateSleeping) {
             _data.running_app_id = -1;
+            update_menu(true);  // Render menu first
             ANIM_APP_CLOSE();
         }
     } else {
