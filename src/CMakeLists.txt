@@ -1,10 +1,10 @@
 file(GLOB_RECURSE MY_SRCS
-    "./hal/*.c"
-    "./hal/*.cc"
-    "./hal/*.cpp"
-    "./apps/*.c"
-    "./apps/*.cc"
-    "./apps/*.cpp"
+    "./hal/**/*.c"
+    "./hal/**/*.cc"
+    "./hal/**/*.cpp"
+    "./apps/**/*.c"
+    "./apps/**/*.cc"
+    "./apps/**/*.cpp"
 )
 
 set(MY_INCLUDE_DIRS 

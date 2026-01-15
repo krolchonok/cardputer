@@ -194,6 +194,15 @@ void AppToolsMenu::onOpen()
     if (_keyboard_app_id >= 0) {
         options.push_back({_keyboard_app_id, "Keyboard", _keyboard_app_icon});
     }
+    if (_explorer_app_id >= 0) {
+        options.push_back({_explorer_app_id, "Explorer", _explorer_app_icon});
+    }
+    if (_usb_app_id >= 0) {
+        options.push_back({_usb_app_id, "USB Storage", _usb_app_icon});
+    }
+    if (_webserver_app_id >= 0) {
+        options.push_back({_webserver_app_id, "WebServer", _webserver_app_icon});
+    }
     _menu->init(options);
     _menu->onOpen = [this](int appId) {
         if (appId >= 0) {
@@ -277,6 +286,15 @@ void AppToolsMenu::resolve_app_ids()
         } else if (app->getAppInfo().name == "Keyboard") {
             _keyboard_app_id = app->getId();
             _keyboard_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
+        } else if (app->getAppInfo().name == "Explorer") {
+            _explorer_app_id = app->getId();
+            _explorer_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
+        } else if (app->getAppInfo().name == "USB Storage") {
+            _usb_app_id = app->getId();
+            _usb_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
+        } else if (app->getAppInfo().name == "WebServer") {
+            _webserver_app_id = app->getId();
+            _webserver_app_icon = static_cast<AppIcon_t*>(app->getAppInfo().userData);
         }
     }
 }

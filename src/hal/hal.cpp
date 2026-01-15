@@ -60,6 +60,13 @@ void Hal::update()
     M5.update();
     keyboard.update();
     capLora868.update();
+    
+    // Check background WiFi connection status
+    if (_is_wifi_inited && !_is_wifi_connected && WiFi.status() == WL_CONNECTED) {
+        _is_wifi_connected = true;
+        start_sntp();
+        mclog::tagInfo(_tag, "WiFi connected in background");
+    }
 }
 
 void Hal::feedTheDog()
@@ -343,7 +350,14 @@ void Hal::wifiAutoConnect()
     }
 
     mclog::tagInfo(_tag, "attempting auto connect to: {}", saved_ssid);
-    wifiConnect(saved_ssid, saved_password);
+    
+    // Non-blocking WiFi connection at startup for faster boot
+    // WiFi will connect in background, apps can check wifiIsConnected() later
+    if (!_is_wifi_inited) {
+        wifiInit();
+    }
+    WiFi.begin(saved_ssid.c_str(), saved_password.c_str());
+    mclog::tagInfo(_tag, "WiFi connecting in background to: {}", saved_ssid);
 }
 
 void Hal::start_sntp()
@@ -1339,4 +1353,10 @@ const std::string& Hal::getBleMouseName() const {
         return bleMouse->getDeviceName();
     }
     return empty;
+}
+
+void Hal::bleMouseClearBonding() {
+    mclog::tagInfo(_tag, "Clearing BLE bonding data...");
+    BleMouseWrapper::clearBondingData();
+    mclog::tagInfo(_tag, "BLE bonding data cleared");
 }

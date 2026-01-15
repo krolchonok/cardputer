@@ -13,6 +13,9 @@
 #include <assets.h>
 #include <esp_system.h>
 #include <hal/utils/ble_mouse_wrapper/ble_mouse_wrapper.h>
+#include <hal/utils/ble_hid_device/ble_hid_device_helper.h>
+
+extern "C" void esp_hidd_send_consumer_value(uint8_t key_cmd, bool key_pressed);
 
 using namespace mooncake;
 using namespace smooth_ui_toolkit;
@@ -84,6 +87,11 @@ void AppKeyboard::onRunning()
                 mclog::tagInfo(getAppInfo().name, "keyboard type selected: TikTok Controller");
                 init_tiktok_controller();
                 _is_tiktok_mode = true;
+            } else if (keyboard_type == KeyboardSelectorMenu::KEYBOARD_TYPE_MEDIA) {
+                mclog::tagInfo(getAppInfo().name, "keyboard type selected: Media Controller");
+                init_media_controller();
+                render_media_interface();
+                _is_media_mode = true;
             }
         }
     } else if (_is_keyboard_active) {
@@ -92,6 +100,9 @@ void AppKeyboard::onRunning()
     } else if (_is_tiktok_mode) {
         // Update TikTok controller
         update_tiktok_controller();
+    } else if (_is_media_mode) {
+        // Update Media controller
+        update_media_controller();
     }
 
     // Close app when home button clicked
@@ -157,15 +168,31 @@ void AppKeyboard::init_usb_keyboard()
 
 void AppKeyboard::update_connection_info()
 {
-    // Update connection status every 2 seconds
+    // Update connection status every 1 second with debounce for BLE
     if (GetHAL().millis() - _info_update_time > 1000) {
         bool ble_connected = GetHAL().bleKeyboardIsConnected();
         bool usb_connected = GetHAL().usbKeyboardIsConnected();
 
+        // BLE debounce: if current read differs from last accepted state,
+        // start/continue candidate timer and accept only after stable interval.
         if (ble_connected != _last_ble_connected) {
-            mclog::tagInfo(getAppInfo().name, "BLE connection: {}", ble_connected ? "connected" : "disconnected");
-            _last_ble_connected = ble_connected;
+            if (_ble_candidate_time == 0 || _ble_candidate_state != ble_connected) {
+                _ble_candidate_state = ble_connected;
+                _ble_candidate_time = GetHAL().millis();
+            } else {
+                // candidate already set and matches current reading
+                if (GetHAL().millis() - _ble_candidate_time >= _ble_debounce_ms) {
+                    mclog::tagInfo(getAppInfo().name, "BLE connection: {}", ble_connected ? "connected" : "disconnected");
+                    _last_ble_connected = ble_connected;
+                    _ble_candidate_time = 0;
+                }
+            }
+        } else {
+            // stable (matches last accepted) — clear any candidate
+            _ble_candidate_time = 0;
         }
+
+        // USB: keep original behavior (no debounce)
         if (usb_connected != _last_usb_connected) {
             mclog::tagInfo(getAppInfo().name, "USB connection: {}", usb_connected ? "connected" : "disconnected");
             _last_usb_connected = usb_connected;
@@ -303,10 +330,90 @@ void AppKeyboard::update_restart_confirm()
 void AppKeyboard::init_tiktok_controller()
 {
     mclog::tagInfo(getAppInfo().name, "initializing TikTok controller");
+    
+    // Clear old bonding data to fix pairing issues
+    GetHAL().bleMouseClearBonding();
+    
     GetHAL().bleMouseInitWithName("TikTok Remote");
     _tiktok_mouse_positioned = false;
     _last_mouse_connected = false;
+    _ble_mouse_stable_connected = false;
+    _ble_mouse_candidate_state = false;
+    _ble_mouse_candidate_time = 0;
     render_tiktok_interface();
+}
+
+void AppKeyboard::init_media_controller()
+{
+    mclog::tagInfo(getAppInfo().name, "initializing Media controller");
+    // Initialize BLE HID device that supports consumer control
+    ble_hid_device_helper_init();
+    ble_hid_device_helper_start_advertising();
+    mclog::tagInfo(getAppInfo().name, "Media controller advertising: {}", ble_hid_device_helper_get_device_name());
+    _ble_mouse_candidate_time = 0;
+}
+
+void AppKeyboard::render_media_interface()
+{
+    auto& canvas = GetHAL().canvas;
+    canvas.fillScreen(THEME_COLOR_BG);
+    canvas.setTextColor(TFT_MAGENTA, THEME_COLOR_BG);
+    canvas.setCursor(0, 0);
+    canvas.setTextSize(1);
+    canvas.println("[Media Controller]");
+
+    canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
+    canvas.println("");
+    canvas.setTextColor(TFT_CYAN, THEME_COLOR_BG);
+    canvas.println("UP: Volume +");
+    canvas.println("DOWN: Volume -");
+    canvas.println("LEFT: Prev track");
+    canvas.println("RIGHT: Next track");
+    canvas.println("SPACE: Play/Pause");
+
+    canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+    canvas.printf("MAC: %s", GetHAL().getBleMacString().c_str());
+    GetHAL().pushCanvas();
+}
+
+void AppKeyboard::update_media_controller()
+{
+    auto event = GetHAL().keyboard.getLatestKeyEventRaw();
+    if (event.row == 0 && event.col == 0) {
+        return;
+    }
+
+    if (ble_hid_device_helper_get_state() != BLE_HID_DEVICE_STATE_CONNECTED) {
+        return;
+    }
+
+    if (event.state) {
+        // Up arrow (row=2, col=11) -> Volume Up
+        if (event.row == 2 && event.col == 11) {
+            esp_hidd_send_consumer_value(233 /* HID_CONSUMER_VOLUME_UP */, true);
+            esp_hidd_send_consumer_value(233 /* HID_CONSUMER_VOLUME_UP */, false);
+        }
+        // Down arrow (row=3, col=11) -> Volume Down
+        else if (event.row == 3 && event.col == 11) {
+            esp_hidd_send_consumer_value(234 /* HID_CONSUMER_VOLUME_DOWN */, true);
+            esp_hidd_send_consumer_value(234 /* HID_CONSUMER_VOLUME_DOWN */, false);
+        }
+        // Left arrow (row=3, col=10) -> Previous Track
+        else if (event.row == 3 && event.col == 10) {
+            esp_hidd_send_consumer_value(182 /* HID_CONSUMER_SCAN_PREV_TRK */, true);
+            esp_hidd_send_consumer_value(182 /* HID_CONSUMER_SCAN_PREV_TRK */, false);
+        }
+        // Right arrow (row=3, col=12) -> Next Track
+        else if (event.row == 3 && event.col == 12) {
+            esp_hidd_send_consumer_value(181 /* HID_CONSUMER_SCAN_NEXT_TRK */, true);
+            esp_hidd_send_consumer_value(181 /* HID_CONSUMER_SCAN_NEXT_TRK */, false);
+        }
+        // Space / Pause (row=3, col=13) -> Play/Pause
+        else if (event.row == 3 && event.col == 13) {
+            esp_hidd_send_consumer_value(205 /* HID_CONSUMER_PLAY_PAUSE */, true);
+            esp_hidd_send_consumer_value(205 /* HID_CONSUMER_PLAY_PAUSE */, false);
+        }
+    }
 }
 
 void AppKeyboard::render_tiktok_interface()
@@ -320,15 +427,24 @@ void AppKeyboard::render_tiktok_interface()
 
     canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
     canvas.println("");
-    canvas.println("UP: Swipe Up (Next)");
-    canvas.println("DOWN: Swipe Down (Prev)");
-    canvas.println("LEFT/RIGHT: Swipe L/R");
-    canvas.println("ENTER: Like");
-    canvas.println("SPACE: Pause");
-    canvas.println("HOME: Center");
-    canvas.println("");
+    if (_show_help_menu) {
+        canvas.println("UP: Swipe Up (Next)");
+        canvas.println("DOWN: Swipe Down (Prev)");
+        canvas.println("LEFT/RIGHT: Swipe L/R");
+        canvas.println("ENTER: Like");
+        canvas.println("SPACE: Pause");
+        canvas.println("L: Toggle Hints");
+        canvas.println("");
+    } else {
+        canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+        canvas.println("Press L to show hints");
+        canvas.println("");
+        canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
+    }
 
-    bool mouse_connected = GetHAL().bleMouseIsConnected();
+    // Use debounced stable state instead of raw reading
+    bool mouse_connected = _ble_mouse_stable_connected;
+
     if (mouse_connected) {
         canvas.setTextColor(TFT_GREEN, THEME_COLOR_BG);
         canvas.println("BLE Mouse: Connected");
@@ -340,7 +456,7 @@ void AppKeyboard::render_tiktok_interface()
         canvas.setTextColor(TFT_RED, THEME_COLOR_BG);
         canvas.println("BLE Mouse: Waiting...");
         canvas.setTextColor(TFT_YELLOW, THEME_COLOR_BG);
-        canvas.printf("Pair: %s\\n", GetHAL().getBleMouseName().c_str());
+        canvas.printf("Pair: %s\n", GetHAL().getBleMouseName().c_str());
     }
 
     canvas.setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
@@ -353,26 +469,40 @@ void AppKeyboard::update_tiktok_controller()
 {
     bool mouse_connected = GetHAL().bleMouseIsConnected();
 
-    // Check if connection status changed
-    if (mouse_connected != _last_mouse_connected) {
-        _last_mouse_connected = mouse_connected;
-        
-        if (mouse_connected && !_tiktok_mouse_positioned) {
-            // Move cursor to top-left corner first
-            mclog::tagInfo(getAppInfo().name, "TikTok: positioning cursor to top-left");
-            GetHAL().bleMouseMove(-9999, -9999);
-            delay(50);
-            // Then move 200 points down and right to be in work area
-            mclog::tagInfo(getAppInfo().name, "TikTok: moving cursor to work area (+200, +200)");
-            GetHAL().bleMouseMove(200, 200);
-            _tiktok_mouse_positioned = true;
+    // Debounce BLE Mouse connection: require stable state for 1500ms
+    if (mouse_connected != _ble_mouse_stable_connected) {
+        if (_ble_mouse_candidate_time == 0 || _ble_mouse_candidate_state != mouse_connected) {
+            _ble_mouse_candidate_state = mouse_connected;
+            _ble_mouse_candidate_time = GetHAL().millis();
+        } else {
+            // candidate set and matches current reading
+            if (GetHAL().millis() - _ble_mouse_candidate_time >= _ble_debounce_ms) {
+                mclog::tagInfo(getAppInfo().name, "BLE Mouse: {}", mouse_connected ? "connected" : "disconnected");
+                _ble_mouse_stable_connected = mouse_connected;
+                _last_mouse_connected = mouse_connected;
+                _ble_mouse_candidate_time = 0;
+
+                if (mouse_connected && !_tiktok_mouse_positioned) {
+                    // Move cursor to top-left corner first
+                    mclog::tagInfo(getAppInfo().name, "TikTok: positioning cursor to top-left");
+                    GetHAL().bleMouseMove(-9999, -9999);
+                    delay(50);
+                    // Then move 200 points down and right to be in work area
+                    mclog::tagInfo(getAppInfo().name, "TikTok: moving cursor to work area (+200, +200)");
+                    GetHAL().bleMouseMove(200, 200);
+                    _tiktok_mouse_positioned = true;
+                }
+
+                render_tiktok_interface();
+            }
         }
-        
-        render_tiktok_interface();
+    } else {
+        // stable — clear candidate
+        _ble_mouse_candidate_time = 0;
     }
 
-    // Update UI periodically
-    if (GetHAL().millis() - _info_update_time > 1000) {
+    // Update UI periodically (every 2 seconds instead of 1 to reduce flicker)
+    if (GetHAL().millis() - _info_update_time > 2000) {
         render_tiktok_interface();
         _info_update_time = GetHAL().millis();
     }
@@ -384,7 +514,7 @@ void AppKeyboard::update_tiktok_controller()
         return;
     }
 
-    if (!mouse_connected) {
+    if (!_ble_mouse_stable_connected) {
         return;
     }
 
@@ -456,13 +586,11 @@ void AppKeyboard::update_tiktok_controller()
             delay(20);
             GetHAL().bleMouseRelease(MOUSE_RIGHT);
         }
-        // row=2, col=12 — возврат курсора в центр
-        else if (event.row == 2 && event.col == 12) {
-            mclog::tagInfo(getAppInfo().name, "TikTok: move cursor to center");
-            // Пример: переместить в центр (400, 120) — подберите под ваш экран
-            GetHAL().bleMouseMove(-99999, -99999); // в левый верхний угол
-            delay(20);
-            GetHAL().bleMouseMove(400, 120); // смещение в центр
+        // row=2, col=10 — toggle help menu visibility (key L)
+        else if (event.row == 2 && event.col == 10) {
+            _show_help_menu = !_show_help_menu;
+            mclog::tagInfo(getAppInfo().name, "TikTok: help menu %s", _show_help_menu ? "shown" : "hidden");
+            render_tiktok_interface();
         }
     }
 }

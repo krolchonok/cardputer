@@ -35,8 +35,15 @@ private:
     AppIcon_t* _chat_app_icon = nullptr;
     int _keyboard_app_id = -1;
     AppIcon_t* _keyboard_app_icon = nullptr;
+    int _explorer_app_id = -1;
+    AppIcon_t* _explorer_app_icon = nullptr;
+    int _usb_app_id = -1;
+    AppIcon_t* _usb_app_icon = nullptr;
+    int _webserver_app_id = -1;
+    AppIcon_t* _webserver_app_icon = nullptr;
     int _child_app_id   = -1;
     bool _is_suspended  = false;
 
     void resolve_app_ids();
+
 };

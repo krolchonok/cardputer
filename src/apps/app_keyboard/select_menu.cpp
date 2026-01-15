@@ -20,6 +20,7 @@ void KeyboardSelectorMenu::init()
     addOption({{10, 30, 100, 20}, nullptr});  // BLE Keyboard
     addOption({{10, 50, 100, 20}, nullptr});  // USB Keyboard
     addOption({{10, 70, 100, 20}, nullptr});  // TikTok Controller
+    addOption({{10, 90, 120, 20}, nullptr});  // Media Controller
 
     // Configure selector animation
     getSelectorPostion().x.springOptions().visualDuration = 0.3;
@@ -42,6 +43,8 @@ void KeyboardSelectorMenu::onClick()
         _keyboard_type = KEYBOARD_TYPE_USB;
     } else if (getSelectedOptionIndex() == 2) {
         _keyboard_type = KEYBOARD_TYPE_TIKTOK;
+    } else if (getSelectedOptionIndex() == 3) {
+        _keyboard_type = KEYBOARD_TYPE_MEDIA;
     }
 
     _is_selected = true;
@@ -102,7 +105,7 @@ void KeyboardSelectorMenu::onRender()
                                         4, (uint32_t)0x69B38C);
 
     // Render options directly
-    const char* option_names[] = {"BLE Keyboard", "USB Keyboard", "TikTok Ctrl"};
+    const char* option_names[] = {"BLE Keyboard", "USB Keyboard", "TikTok Ctrl", "Media Ctrl"};
 
     int i = 0;
     for (auto& option : getOptionList()) {

@@ -27,5 +27,10 @@ private:
     int _child_app_id      = -1;
     bool _is_suspended     = false;
 
+    // System bar debounce
+    uint32_t _system_bar_update_time = 0;
+    uint32_t _system_bar_update_period = 1000; // ms
+    bool _last_wifi_connected = false;
+
     void resolve_app_ids();
 };

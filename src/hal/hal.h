@@ -151,6 +151,7 @@ public:
     void bleMouseMove(int x, int y);
     void bleMouseCenterCursor();
     const std::string& getBleMouseName() const;
+    void bleMouseClearBonding();  // Clear all BLE bonding data
 
 private:
     static constexpr int k_canvas_width_with_bar = 204;

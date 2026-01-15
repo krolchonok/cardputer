@@ -44,8 +44,7 @@ private:
     std::vector<std::string> _file_content;
     int _viewer_scroll;
     
-    static constexpr int k_visible_items = 8;
-    static constexpr int k_item_height = 12;
+    static constexpr int k_item_height = 16;
     
     void list_directory(const std::string& path);
     void render_browser();
@@ -53,4 +52,6 @@ private:
     void open_selected_item();
     void read_file_content(const std::string& filepath);
     void go_back();
+    int calc_browser_visible_items() const;
+    int calc_viewer_visible_items() const;
 };

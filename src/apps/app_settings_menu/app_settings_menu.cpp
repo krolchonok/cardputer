@@ -11,6 +11,7 @@
 #include <smooth_ui_toolkit.h>
 #include "app_set_wifi/assets/set_wifi_big.h"
 #include "app_set_wifi/assets/set_wifi_small.h"
+#include "../app_launcher/view/system_bar/system_bar_shared.h"
 
 using namespace mooncake;
 using namespace smooth_ui_toolkit;
@@ -184,6 +185,10 @@ void AppSettingsMenu::onOpen()
             GetMooncake().openApp(appId);
         }
     };
+
+    // Init system bar state
+    _last_wifi_connected = GetHAL().isWifiConnected();
+    _system_bar_update_time = 0;
 }
 
 void AppSettingsMenu::onRunning()
@@ -204,21 +209,14 @@ void AppSettingsMenu::onRunning()
         _menu->update();
     }
 
-    // Display WiFi info at the top of screen
-    GetHAL().canvasSystemBar.fillScreen(THEME_COLOR_BG);
-    GetHAL().canvasSystemBar.setTextSize(1);
-    GetHAL().canvasSystemBar.setTextColor(TFT_WHITE, THEME_COLOR_BG);
-    GetHAL().canvasSystemBar.setCursor(0, 0);
-    
-    if (GetHAL().isWifiConnected()) {
-        GetHAL().canvasSystemBar.setTextColor(TFT_GREEN, THEME_COLOR_BG);
-        GetHAL().canvasSystemBar.printf("WiFi: %s", GetHAL().getWifiIpAddress().c_str());
-    } else {
-        GetHAL().canvasSystemBar.setTextColor(TFT_ORANGE, THEME_COLOR_BG);
-        GetHAL().canvasSystemBar.printf("WiFi: Disconnected");
+    // Debounced system bar update — update on state change or every period
+    bool wifi_connected = GetHAL().isWifiConnected();
+    if (wifi_connected != _last_wifi_connected || (GetHAL().millis() - _system_bar_update_time) > _system_bar_update_period) {
+        // Use shared renderer (same visuals/behavior as Launcher)
+        render_system_bar_shared();
+        _system_bar_update_time = GetHAL().millis();
+        _last_wifi_connected = wifi_connected;
     }
-    
-    GetHAL().pushCanvasSystemBar();
 
     if (GetHAL().homeButton.wasClicked()) {
         audio::play_random_tone();

@@ -12,6 +12,9 @@ public:
     void release(uint8_t button);
     void move(int x, int y);
     const std::string& getDeviceName() const;
+    
+    // Clear all BLE bonding data to fix pairing issues
+    static void clearBondingData();
 
 private:
     BleMouse _bleMouse;

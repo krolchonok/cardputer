@@ -31,6 +31,8 @@ void LauncherMenu::init(int launcherAppId)
         if (app->getId() == launcherAppId || app->getAppInfo().name == "SetWiFi" ||
             app->getAppInfo().name == "Sound" || app->getAppInfo().name == "Display" ||
             app->getAppInfo().name == "Scan" || app->getAppInfo().name == "Remote" ||
+            app->getAppInfo().name == "IR Files" || app->getAppInfo().name == "Explorer" ||
+            app->getAppInfo().name == "USB Storage" || app->getAppInfo().name == "WebServer" ||
             app->getAppInfo().name == "StringIR" || app->getAppInfo().name == "Clock" ||
             app->getAppInfo().name == "IMU" || app->getAppInfo().name == "SDCard" ||
             app->getAppInfo().name == "Record" || app->getAppInfo().name == "Chat" ||

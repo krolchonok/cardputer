@@ -9,6 +9,7 @@
 #include <mooncake_log.h>
 #include <hal/hal.h>
 #include <hal.h>
+#include <algorithm>
 
 using namespace mooncake;
 
@@ -18,7 +19,13 @@ void Launcher::onCreate()
     mclog::tagInfo(getAppInfo().name, "on create");
 
     // Init
-    boot_anim();
+    // Skip boot animation to show menu immediately and apply saved brightness
+    {
+        int32_t bright = GetHAL().getSettings().GetInt("disp_bright", 10);
+        bright = std::clamp<int32_t>(bright, 0, 10);
+        uint8_t hw_brightness = static_cast<uint8_t>((bright * 255 + 5) / 10);
+        GetHAL().display.setBrightness(hw_brightness);
+    }
     start_menu();
     start_system_bar();
     start_keyboard_bar();
