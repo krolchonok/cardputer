@@ -13,9 +13,16 @@
 #include <assets.h>
 #include <esp_system.h>
 #include <hal/utils/ble_mouse_wrapper/ble_mouse_wrapper.h>
-#include <hal/utils/ble_hid_device/ble_hid_device_helper.h>
+#include <hal/utils/ble_keyboard_wrapper/ble_keyboard_wrapper.h>
 
-extern "C" void esp_hidd_send_consumer_value(uint8_t key_cmd, bool key_pressed);
+// HID Consumer Control Usage IDs
+#define HID_CONSUMER_VOLUME_UP      0xE9
+#define HID_CONSUMER_VOLUME_DOWN    0xEA
+#define HID_CONSUMER_MUTE           0xE2
+#define HID_CONSUMER_PLAY_PAUSE     0xCD
+#define HID_CONSUMER_SCAN_NEXT      0xB5
+#define HID_CONSUMER_SCAN_PREV      0xB6
+#define HID_CONSUMER_STOP           0xB7
 
 using namespace mooncake;
 using namespace smooth_ui_toolkit;
@@ -346,10 +353,11 @@ void AppKeyboard::init_tiktok_controller()
 void AppKeyboard::init_media_controller()
 {
     mclog::tagInfo(getAppInfo().name, "initializing Media controller");
-    // Initialize BLE HID device that supports consumer control
-    ble_hid_device_helper_init();
-    ble_hid_device_helper_start_advertising();
-    mclog::tagInfo(getAppInfo().name, "Media controller advertising: {}", ble_hid_device_helper_get_device_name());
+    
+    // Use the unified BLE HID implementation (same as keyboard, supports media keys)
+    GetHAL().bleKeyboardInit();
+    
+    mclog::tagInfo(getAppInfo().name, "Media controller initialized: {}", GetHAL().getBleKeyboardName());
     _ble_mouse_candidate_time = 0;
 }
 
@@ -364,6 +372,17 @@ void AppKeyboard::render_media_interface()
 
     canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
     canvas.println("");
+    
+    // Show connection status
+    bool connected = GetHAL().bleKeyboardIsConnected();
+    if (connected) {
+        canvas.setTextColor(TFT_GREEN, THEME_COLOR_BG);
+        canvas.println("BLE: Connected");
+    } else {
+        canvas.setTextColor(TFT_YELLOW, THEME_COLOR_BG);
+        canvas.println("BLE: Waiting...");
+    }
+    
     canvas.setTextColor(TFT_CYAN, THEME_COLOR_BG);
     canvas.println("UP: Volume +");
     canvas.println("DOWN: Volume -");
@@ -378,40 +397,46 @@ void AppKeyboard::render_media_interface()
 
 void AppKeyboard::update_media_controller()
 {
+    // Update UI periodically to show connection status
+    if (GetHAL().millis() - _info_update_time > 1000) {
+        render_media_interface();
+        _info_update_time = GetHAL().millis();
+    }
+
     auto event = GetHAL().keyboard.getLatestKeyEventRaw();
     if (event.row == 0 && event.col == 0) {
         return;
     }
 
-    if (ble_hid_device_helper_get_state() != BLE_HID_DEVICE_STATE_CONNECTED) {
+    if (!GetHAL().bleKeyboardIsConnected()) {
         return;
     }
 
     if (event.state) {
         // Up arrow (row=2, col=11) -> Volume Up
         if (event.row == 2 && event.col == 11) {
-            esp_hidd_send_consumer_value(233 /* HID_CONSUMER_VOLUME_UP */, true);
-            esp_hidd_send_consumer_value(233 /* HID_CONSUMER_VOLUME_UP */, false);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_VOLUME_UP, true);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_VOLUME_UP, false);
         }
         // Down arrow (row=3, col=11) -> Volume Down
         else if (event.row == 3 && event.col == 11) {
-            esp_hidd_send_consumer_value(234 /* HID_CONSUMER_VOLUME_DOWN */, true);
-            esp_hidd_send_consumer_value(234 /* HID_CONSUMER_VOLUME_DOWN */, false);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_VOLUME_DOWN, true);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_VOLUME_DOWN, false);
         }
         // Left arrow (row=3, col=10) -> Previous Track
         else if (event.row == 3 && event.col == 10) {
-            esp_hidd_send_consumer_value(182 /* HID_CONSUMER_SCAN_PREV_TRK */, true);
-            esp_hidd_send_consumer_value(182 /* HID_CONSUMER_SCAN_PREV_TRK */, false);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_SCAN_PREV, true);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_SCAN_PREV, false);
         }
         // Right arrow (row=3, col=12) -> Next Track
         else if (event.row == 3 && event.col == 12) {
-            esp_hidd_send_consumer_value(181 /* HID_CONSUMER_SCAN_NEXT_TRK */, true);
-            esp_hidd_send_consumer_value(181 /* HID_CONSUMER_SCAN_NEXT_TRK */, false);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_SCAN_NEXT, true);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_SCAN_NEXT, false);
         }
         // Space / Pause (row=3, col=13) -> Play/Pause
         else if (event.row == 3 && event.col == 13) {
-            esp_hidd_send_consumer_value(205 /* HID_CONSUMER_PLAY_PAUSE */, true);
-            esp_hidd_send_consumer_value(205 /* HID_CONSUMER_PLAY_PAUSE */, false);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_PLAY_PAUSE, true);
+            GetHAL().bleKeyboardSendMediaKey(HID_CONSUMER_PLAY_PAUSE, false);
         }
     }
 }

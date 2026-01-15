@@ -100,8 +100,12 @@ public:
 
     /* ----------------------------------- BLE ---------------------------------- */
     void bleKeyboardInit();
+    void bleKeyboardDeinit();
     bool bleKeyboardIsConnected() const;
     const char* getBleKeyboardName() const;
+    void bleKeyboardClearBonding();
+    void bleKeyboardStartAdvertising();
+    void bleKeyboardSendMediaKey(uint16_t usageId, bool pressed);
 
     /* ----------------------------------- USB ---------------------------------- */
     void usbKeyboardInit();

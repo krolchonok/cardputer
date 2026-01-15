@@ -873,12 +873,14 @@ void Hal::bleKeyboardInit()
 {
     if (_is_ble_keyboard_inited) {
         mclog::tagWarn(_tag, "ble keyboard already initialized");
+        // Just restart advertising if already initialized
+        ble_keyboard_wrapper_start_advertising();
         return;
     }
 
     mclog::tagInfo(_tag, "ble keyboard init");
 
-    // Initialize BLE Keyboard wrapper
+    // Initialize unified BLE HID wrapper (keyboard + media)
     if (!ble_keyboard_wrapper_init("CardputerADV")) {
         mclog::tagError(_tag, "ble keyboard init failed");
         return;
@@ -892,6 +894,24 @@ void Hal::bleKeyboardInit()
     mclog::tagInfo(_tag, "ble keyboard init done, auto-forwarding enabled");
 }
 
+void Hal::bleKeyboardDeinit()
+{
+    if (!_is_ble_keyboard_inited) {
+        return;
+    }
+
+    mclog::tagInfo(_tag, "ble keyboard deinit");
+
+    // Disconnect keyboard event callback
+    if (_ble_keyboard_event_slot_id >= 0) {
+        keyboard.onKeyEvent.disconnect(_ble_keyboard_event_slot_id);
+        _ble_keyboard_event_slot_id = -1;
+    }
+
+    ble_keyboard_wrapper_deinit();
+    _is_ble_keyboard_inited = false;
+}
+
 bool Hal::bleKeyboardIsConnected() const
 {
     if (!_is_ble_keyboard_inited) {
@@ -903,7 +923,28 @@ bool Hal::bleKeyboardIsConnected() const
 
 const char* Hal::getBleKeyboardName() const
 {
-    return "CardputerADV";
+    return ble_keyboard_wrapper_get_device_name();
+}
+
+void Hal::bleKeyboardClearBonding()
+{
+    mclog::tagInfo(_tag, "clearing BLE keyboard bonding data");
+    ble_keyboard_wrapper_clear_bonding();
+}
+
+void Hal::bleKeyboardStartAdvertising()
+{
+    if (_is_ble_keyboard_inited) {
+        ble_keyboard_wrapper_start_advertising();
+    }
+}
+
+void Hal::bleKeyboardSendMediaKey(uint16_t usageId, bool pressed)
+{
+    if (!_is_ble_keyboard_inited || !ble_keyboard_wrapper_is_connected()) {
+        return;
+    }
+    ble_keyboard_wrapper_send_media_key(usageId, pressed);
 }
 
 void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
