@@ -998,8 +998,6 @@ void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
         ble_keyboard_wrapper_send_report(modifiers, keys);
     }
 
-    mclog::tagDebug(_tag, "ble keyboard report sent: modifiers=0x{:02x}, keys=[{}]",
-                    modifiers, fmt::join(pressedKeys, ","));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1067,11 +1065,8 @@ void Hal::handle_usb_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
     if (keyEvent.state) {
         uint8_t keycode[6] = {keyEvent.keyCode};
         tusb_hid_device_helper_report(GetHAL().keyboard.getModifierMask(), keycode);
-        mclog::tagDebug(_tag, "usb keyboard sent key: {} (code: {})", keyEvent.keyName ? keyEvent.keyName : "special",
-                        (int)keyEvent.keyCode);
     } else {
         tusb_hid_device_helper_report(0, NULL);
-        mclog::tagDebug(_tag, "usb keyboard key released");
     }
 }
 

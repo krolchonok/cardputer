@@ -58,16 +58,11 @@ void Keyboard::update()
     }
 
     remap(_key_event_raw_buffer);
-    mclog::tagDebug(_tag, "raw event -> row:{}, col:{}, state:{}", _key_event_raw_buffer.row, _key_event_raw_buffer.col,
-                    _key_event_raw_buffer.state);
     onKeyEventRaw.emit(_key_event_raw_buffer);
 
     update_modifier_mask(_key_event_raw_buffer);
     _key_event_buffer = convertToKeyEvent(_key_event_raw_buffer);
     bool fn_active = isFnActive();
-    mclog::tagDebug(_tag, "mapped event -> row:{}, col:{}, key:{}, code:{}, modifier_mask:0x{:02x}, fn:{}",
-                    _key_event_raw_buffer.row, _key_event_raw_buffer.col, _key_event_buffer.keyName ? _key_event_buffer.keyName : "", (int)_key_event_buffer.keyCode,
-                    _modifier_mask, fn_active);
     onKeyEvent.emit(_key_event_buffer);
 }
 
@@ -112,7 +107,6 @@ void Keyboard::update_modifier_mask(const KeyEventRaw_t& key)
         uint8_t fn_row_val = _tca8418->digitalRead(fn_row_pin);
         uint8_t fn_col_val = _tca8418->digitalRead(fn_col_pin);
         bool fn_phys_pressed = (fn_row_val == TCA8418_LOW) || (fn_col_val == TCA8418_LOW);
-        mclog::tagDebug(_tag, "Fn physical state read: row_pin={}, col_pin={}, row_val={}, col_val={}, fn_phys={}", fn_row_pin, fn_col_pin, fn_row_val, fn_col_val, fn_phys_pressed);
         if (fn_phys_pressed) {
             _fn_pressed = true;
             _fn_last_state = true;
@@ -120,7 +114,6 @@ void Keyboard::update_modifier_mask(const KeyEventRaw_t& key)
         } else {
             // do not clear _fn_pressed/_fn_last_state here to avoid races where
             // physical read lags other events; explicit Fn release will clear state
-            mclog::tagDebug(_tag, "Fn physical not pressed (no clear) - waiting for explicit release or timeout");
         }
     }
 

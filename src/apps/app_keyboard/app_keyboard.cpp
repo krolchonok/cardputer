@@ -13,7 +13,6 @@
 #include <assets.h>
 #include <esp_system.h>
 #include <hal/utils/ble_mouse_wrapper/ble_mouse_wrapper.h>
-#include <hal/utils/ble_keyboard_wrapper/ble_keyboard_wrapper.h>
 
 // HID Consumer Control Usage IDs
 #define HID_CONSUMER_VOLUME_UP      0xE9
@@ -51,6 +50,15 @@ void AppKeyboard::onOpen()
     _show_restart_confirm = false;
     _restart_confirm_dirty = false;
     _restart_confirm_choice = 0;
+    _is_tiktok_mode = false;
+    _is_media_mode = false;
+    _show_help_menu = false;
+    _tiktok_mouse_positioned = false;
+    _ble_candidate_state = false;
+    _ble_candidate_time = 0;
+    _ble_mouse_candidate_state = false;
+    _ble_mouse_candidate_time = 0;
+    _ble_mouse_stable_connected = false;
 
     // Create and initialize selector menu
     _selector_menu = new KeyboardSelectorMenu();
@@ -138,12 +146,72 @@ void AppKeyboard::onClose()
     }
 
     if (_is_keyboard_active) {
-        GetHAL().usbKeyboardDeinit();
+        if (_keyboard_type == KeyboardSelectorMenu::KEYBOARD_TYPE_USB) {
+            GetHAL().usbKeyboardDeinit();
+        } else if (_keyboard_type == KeyboardSelectorMenu::KEYBOARD_TYPE_BLE) {
+            GetHAL().bleKeyboardDeinit();
+        }
         close();
         return;
     }
 
+    if (_is_media_mode) {
+        GetHAL().bleKeyboardDeinit();
+    }
+
+    if (_is_tiktok_mode) {
+        GetHAL().bleMouseDeinit();
+    }
+
     close();
+}
+
+bool AppKeyboard::update_debounced_state(bool current_state,
+                                         bool& stable_state,
+                                         bool& candidate_state,
+                                         uint32_t& candidate_time,
+                                         uint32_t debounce_ms)
+{
+    if (current_state != stable_state) {
+        if (candidate_time == 0 || candidate_state != current_state) {
+            candidate_state = current_state;
+            candidate_time = GetHAL().millis();
+        } else if (GetHAL().millis() - candidate_time >= debounce_ms) {
+            stable_state = current_state;
+            candidate_time = 0;
+            return true;
+        }
+    } else {
+        candidate_time = 0;
+    }
+
+    return false;
+}
+
+void AppKeyboard::log_connection_state(const char* label, bool connected)
+{
+    mclog::tagInfo(getAppInfo().name, "{}: {}", label, connected ? "connected" : "disconnected");
+}
+
+void AppKeyboard::update_ble_connection_state()
+{
+    bool ble_connected = GetHAL().bleKeyboardIsConnected();
+    if (update_debounced_state(ble_connected, _last_ble_connected, _ble_candidate_state, _ble_candidate_time,
+                               _ble_debounce_ms)) {
+        log_connection_state("BLE", _last_ble_connected);
+    }
+}
+
+bool AppKeyboard::update_ble_mouse_connection_state()
+{
+    bool mouse_connected = GetHAL().bleMouseIsConnected();
+    if (update_debounced_state(mouse_connected, _ble_mouse_stable_connected, _ble_mouse_candidate_state,
+                               _ble_mouse_candidate_time, _ble_debounce_ms)) {
+        log_connection_state("BLE Mouse", _ble_mouse_stable_connected);
+        return true;
+    }
+
+    return false;
 }
 
 void AppKeyboard::select_keyboard_type()
@@ -161,47 +229,31 @@ void AppKeyboard::select_keyboard_type()
 
 void AppKeyboard::init_ble_keyboard()
 {
-    mclog::tagInfo(getAppInfo().name, "initializing BLE keyboard");
+    mclog::tagInfo(getAppInfo().name, "BLE keyboard init");
+    _last_ble_connected = false;
+    _ble_candidate_state = false;
+    _ble_candidate_time = 0;
     GetHAL().bleKeyboardInit();
-    mclog::tagInfo(getAppInfo().name, "BLE enabled, device name: {}", GetHAL().getBleKeyboardName());
+    mclog::tagInfo(getAppInfo().name, "BLE keyboard ready: {}", GetHAL().getBleKeyboardName());
 }
 
 void AppKeyboard::init_usb_keyboard()
 {
-    mclog::tagInfo(getAppInfo().name, "initializing USB keyboard");
+    mclog::tagInfo(getAppInfo().name, "USB keyboard init");
     GetHAL().usbKeyboardInit();
-    mclog::tagInfo(getAppInfo().name, "USB HID enabled");
+    mclog::tagInfo(getAppInfo().name, "USB keyboard ready");
 }
 
 void AppKeyboard::update_connection_info()
 {
     // Update connection status every 1 second with debounce for BLE
     if (GetHAL().millis() - _info_update_time > 1000) {
-        bool ble_connected = GetHAL().bleKeyboardIsConnected();
+        update_ble_connection_state();
         bool usb_connected = GetHAL().usbKeyboardIsConnected();
-
-        // BLE debounce: if current read differs from last accepted state,
-        // start/continue candidate timer and accept only after stable interval.
-        if (ble_connected != _last_ble_connected) {
-            if (_ble_candidate_time == 0 || _ble_candidate_state != ble_connected) {
-                _ble_candidate_state = ble_connected;
-                _ble_candidate_time = GetHAL().millis();
-            } else {
-                // candidate already set and matches current reading
-                if (GetHAL().millis() - _ble_candidate_time >= _ble_debounce_ms) {
-                    mclog::tagInfo(getAppInfo().name, "BLE connection: {}", ble_connected ? "connected" : "disconnected");
-                    _last_ble_connected = ble_connected;
-                    _ble_candidate_time = 0;
-                }
-            }
-        } else {
-            // stable (matches last accepted) — clear any candidate
-            _ble_candidate_time = 0;
-        }
 
         // USB: keep original behavior (no debounce)
         if (usb_connected != _last_usb_connected) {
-            mclog::tagInfo(getAppInfo().name, "USB connection: {}", usb_connected ? "connected" : "disconnected");
+            log_connection_state("USB", usb_connected);
             _last_usb_connected = usb_connected;
         }
 
@@ -234,8 +286,8 @@ void AppKeyboard::render_connection_status()
     GetHAL().canvas.setCursor(0, 32);
 
     // Check both BLE and USB connections
-    bool ble_connected = GetHAL().bleKeyboardIsConnected();
-    bool usb_connected = GetHAL().usbKeyboardIsConnected();
+    bool ble_connected = _last_ble_connected;
+    bool usb_connected = _last_usb_connected;
 
     if (ble_connected) {
         GetHAL().canvas.setTextColor(TFT_GREEN, THEME_COLOR_BG);
@@ -336,14 +388,13 @@ void AppKeyboard::update_restart_confirm()
 
 void AppKeyboard::init_tiktok_controller()
 {
-    mclog::tagInfo(getAppInfo().name, "initializing TikTok controller");
+    mclog::tagInfo(getAppInfo().name, "TikTok controller init");
     
     // Clear old bonding data to fix pairing issues
     GetHAL().bleMouseClearBonding();
     
     GetHAL().bleMouseInitWithName("TikTok Remote");
     _tiktok_mouse_positioned = false;
-    _last_mouse_connected = false;
     _ble_mouse_stable_connected = false;
     _ble_mouse_candidate_state = false;
     _ble_mouse_candidate_time = 0;
@@ -352,13 +403,15 @@ void AppKeyboard::init_tiktok_controller()
 
 void AppKeyboard::init_media_controller()
 {
-    mclog::tagInfo(getAppInfo().name, "initializing Media controller");
+    mclog::tagInfo(getAppInfo().name, "media controller init");
+    _last_ble_connected = false;
+    _ble_candidate_state = false;
+    _ble_candidate_time = 0;
     
     // Use the unified BLE HID implementation (same as keyboard, supports media keys)
     GetHAL().bleKeyboardInit();
     
-    mclog::tagInfo(getAppInfo().name, "Media controller initialized: {}", GetHAL().getBleKeyboardName());
-    _ble_mouse_candidate_time = 0;
+    mclog::tagInfo(getAppInfo().name, "media controller ready: {}", GetHAL().getBleKeyboardName());
 }
 
 void AppKeyboard::render_media_interface()
@@ -374,8 +427,7 @@ void AppKeyboard::render_media_interface()
     canvas.println("");
     
     // Show connection status
-    bool connected = GetHAL().bleKeyboardIsConnected();
-    if (connected) {
+    if (_last_ble_connected) {
         canvas.setTextColor(TFT_GREEN, THEME_COLOR_BG);
         canvas.println("BLE: Connected");
     } else {
@@ -397,6 +449,8 @@ void AppKeyboard::render_media_interface()
 
 void AppKeyboard::update_media_controller()
 {
+    update_ble_connection_state();
+
     // Update UI periodically to show connection status
     if (GetHAL().millis() - _info_update_time > 1000) {
         render_media_interface();
@@ -408,7 +462,7 @@ void AppKeyboard::update_media_controller()
         return;
     }
 
-    if (!GetHAL().bleKeyboardIsConnected()) {
+    if (!_last_ble_connected) {
         return;
     }
 
@@ -492,38 +546,20 @@ void AppKeyboard::render_tiktok_interface()
 
 void AppKeyboard::update_tiktok_controller()
 {
-    bool mouse_connected = GetHAL().bleMouseIsConnected();
-
-    // Debounce BLE Mouse connection: require stable state for 1500ms
-    if (mouse_connected != _ble_mouse_stable_connected) {
-        if (_ble_mouse_candidate_time == 0 || _ble_mouse_candidate_state != mouse_connected) {
-            _ble_mouse_candidate_state = mouse_connected;
-            _ble_mouse_candidate_time = GetHAL().millis();
-        } else {
-            // candidate set and matches current reading
-            if (GetHAL().millis() - _ble_mouse_candidate_time >= _ble_debounce_ms) {
-                mclog::tagInfo(getAppInfo().name, "BLE Mouse: {}", mouse_connected ? "connected" : "disconnected");
-                _ble_mouse_stable_connected = mouse_connected;
-                _last_mouse_connected = mouse_connected;
-                _ble_mouse_candidate_time = 0;
-
-                if (mouse_connected && !_tiktok_mouse_positioned) {
-                    // Move cursor to top-left corner first
-                    mclog::tagInfo(getAppInfo().name, "TikTok: positioning cursor to top-left");
-                    GetHAL().bleMouseMove(-9999, -9999);
-                    delay(50);
-                    // Then move 200 points down and right to be in work area
-                    mclog::tagInfo(getAppInfo().name, "TikTok: moving cursor to work area (+200, +200)");
-                    GetHAL().bleMouseMove(200, 200);
-                    _tiktok_mouse_positioned = true;
-                }
-
-                render_tiktok_interface();
-            }
+    bool state_changed = update_ble_mouse_connection_state();
+    if (state_changed) {
+        if (_ble_mouse_stable_connected && !_tiktok_mouse_positioned) {
+            // Move cursor to top-left corner first
+            mclog::tagInfo(getAppInfo().name, "TikTok: positioning cursor to top-left");
+            GetHAL().bleMouseMove(-9999, -9999);
+            delay(50);
+            // Then move 200 points down and right to be in work area
+            mclog::tagInfo(getAppInfo().name, "TikTok: moving cursor to work area (+200, +200)");
+            GetHAL().bleMouseMove(200, 200);
+            _tiktok_mouse_positioned = true;
         }
-    } else {
-        // stable — clear candidate
-        _ble_mouse_candidate_time = 0;
+
+        render_tiktok_interface();
     }
 
     // Update UI periodically (every 2 seconds instead of 1 to reduce flicker)
@@ -547,7 +583,6 @@ void AppKeyboard::update_tiktok_controller()
         // Key pressed - simulate swipe by pressing and dragging
         // Up arrow (row=2, col=11)
         if (event.row == 2 && event.col == 11) {
-            mclog::tagInfo(getAppInfo().name, "TikTok: swipe up (next video)");
             GetHAL().bleMousePress(MOUSE_LEFT);
             delay(20);
             GetHAL().bleMouseMove(0, -200);
@@ -559,7 +594,6 @@ void AppKeyboard::update_tiktok_controller()
         }
         // Down arrow (row=3, col=11)
         else if (event.row == 3 && event.col == 11) {
-            mclog::tagInfo(getAppInfo().name, "TikTok: swipe down (prev video)");
             GetHAL().bleMousePress(MOUSE_LEFT);
             delay(20);
             GetHAL().bleMouseMove(0, 200);
@@ -571,7 +605,6 @@ void AppKeyboard::update_tiktok_controller()
         }
         // Left arrow (row=3, col=10)
         else if (event.row == 3 && event.col == 10) {
-            mclog::tagInfo(getAppInfo().name, "TikTok: swipe left");
             GetHAL().bleMousePress(MOUSE_LEFT);
             delay(20);
             GetHAL().bleMouseMove(-200, 0);
@@ -583,7 +616,6 @@ void AppKeyboard::update_tiktok_controller()
         }
         // Right arrow (row=3, col=12)
         else if (event.row == 3 && event.col == 12) {
-            mclog::tagInfo(getAppInfo().name, "TikTok: swipe right");
             GetHAL().bleMousePress(MOUSE_LEFT);
             delay(20);
             GetHAL().bleMouseMove(200, 0);
@@ -595,7 +627,6 @@ void AppKeyboard::update_tiktok_controller()
         }
         // Enter key (row=2, col=13) - double click for like
         else if (event.row == 2 && event.col == 13) {
-            mclog::tagInfo(getAppInfo().name, "TikTok: double click (like)");
             GetHAL().bleMousePress(MOUSE_LEFT);
             delay(20);
             GetHAL().bleMouseRelease(MOUSE_LEFT);
@@ -606,7 +637,6 @@ void AppKeyboard::update_tiktok_controller()
         }
         // row=3, col=13 — пауза (ПКМ)
         else if (event.row == 3 && event.col == 13) {
-            mclog::tagInfo(getAppInfo().name, "TikTok: pause (right click)");
             GetHAL().bleMousePress(MOUSE_RIGHT);
             delay(20);
             GetHAL().bleMouseRelease(MOUSE_RIGHT);
@@ -614,7 +644,6 @@ void AppKeyboard::update_tiktok_controller()
         // row=2, col=10 — toggle help menu visibility (key L)
         else if (event.row == 2 && event.col == 10) {
             _show_help_menu = !_show_help_menu;
-            mclog::tagInfo(getAppInfo().name, "TikTok: help menu %s", _show_help_menu ? "shown" : "hidden");
             render_tiktok_interface();
         }
     }

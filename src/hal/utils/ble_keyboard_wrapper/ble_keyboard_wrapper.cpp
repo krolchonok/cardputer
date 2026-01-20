@@ -16,10 +16,12 @@
 #include <HIDTypes.h>
 
 #include <string.h>
-#include <esp_log.h>
 #include <esp_gap_ble_api.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <mooncake_log.h>
 
-static const char* TAG = "BLE_KBD";
+static const char* TAG = "ble_kbd";
 
 // HID Report IDs
 #define REPORT_ID_KEYBOARD   1
@@ -108,7 +110,7 @@ static uint8_t modifiers = 0;
 // Connection callbacks
 class BleKeyboardCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) override {
-        ESP_LOGI(TAG, "Client connected");
+        mclog::tagInfo(TAG, "client connected");
         currentState = BLE_HID_STATE_CONNECTED;
         
         // Stop advertising on connect
@@ -116,7 +118,7 @@ class BleKeyboardCallbacks : public BLEServerCallbacks {
     }
     
     void onDisconnect(BLEServer* pServer) override {
-        ESP_LOGI(TAG, "Client disconnected");
+        mclog::tagInfo(TAG, "client disconnected");
         currentState = BLE_HID_STATE_IDLE;
         
         // Clear keyboard state
@@ -124,7 +126,7 @@ class BleKeyboardCallbacks : public BLEServerCallbacks {
         modifiers = 0;
         
         // Restart advertising after a short delay
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
         ble_keyboard_wrapper_start_advertising();
     }
 };
@@ -137,7 +139,7 @@ class OutputReportCallbacks : public BLECharacteristicCallbacks {
         uint8_t* data = pCharacteristic->getData();
         size_t len = pCharacteristic->getLength();
         if (len > 0) {
-            ESP_LOGD(TAG, "LED status: 0x%02X", data[0]);
+            mclog::tagDebug(TAG, "LED status: 0x{:02X}", data[0]);
             // data[0] contains LED state:
             // bit 0: Num Lock
             // bit 1: Caps Lock
@@ -152,7 +154,7 @@ static OutputReportCallbacks outputCallbacks;
 
 bool ble_keyboard_wrapper_init(const char* deviceName) {
     if (isInitialized) {
-        ESP_LOGW(TAG, "Already initialized");
+        mclog::tagWarn(TAG, "already initialized");
         return true;
     }
     
@@ -160,7 +162,7 @@ bool ble_keyboard_wrapper_init(const char* deviceName) {
     strncpy(deviceNameBuffer, deviceName, sizeof(deviceNameBuffer) - 1);
     deviceNameBuffer[sizeof(deviceNameBuffer) - 1] = '\0';
     
-    ESP_LOGI(TAG, "Initializing BLE HID: %s", deviceNameBuffer);
+    mclog::tagInfo(TAG, "initializing BLE HID: {}", deviceNameBuffer);
     
     // Initialize BLE
     BLEDevice::init(deviceNameBuffer);
@@ -214,7 +216,7 @@ bool ble_keyboard_wrapper_init(const char* deviceName) {
     ble_keyboard_wrapper_start_advertising();
     
     isInitialized = true;
-    ESP_LOGI(TAG, "BLE HID initialized successfully");
+    mclog::tagInfo(TAG, "BLE HID initialized successfully");
     
     return true;
 }
@@ -224,7 +226,7 @@ void ble_keyboard_wrapper_deinit(void) {
         return;
     }
     
-    ESP_LOGI(TAG, "Deinitializing BLE HID");
+    mclog::tagInfo(TAG, "deinitializing BLE HID");
     
     ble_keyboard_wrapper_stop_advertising();
     
@@ -256,11 +258,11 @@ void ble_keyboard_wrapper_start_advertising(void) {
     }
     
     if (currentState == BLE_HID_STATE_CONNECTED) {
-        ESP_LOGD(TAG, "Already connected, not starting advertising");
+        mclog::tagDebug(TAG, "already connected, not starting advertising");
         return;
     }
     
-    ESP_LOGI(TAG, "Starting BLE advertising");
+    mclog::tagInfo(TAG, "starting BLE advertising");
     
     BLEAdvertising* pAdvertising = pServer->getAdvertising();
     
@@ -278,7 +280,7 @@ void ble_keyboard_wrapper_start_advertising(void) {
     pAdvertising->start();
     currentState = BLE_HID_STATE_ADVERTISING;
     
-    ESP_LOGI(TAG, "Advertising started");
+    mclog::tagInfo(TAG, "advertising started");
 }
 
 void ble_keyboard_wrapper_stop_advertising(void) {
@@ -381,7 +383,7 @@ void ble_keyboard_wrapper_send_media_key(uint16_t usageId, bool pressed) {
 }
 
 void ble_keyboard_wrapper_clear_bonding(void) {
-    ESP_LOGI(TAG, "Clearing BLE bonding data");
+    mclog::tagInfo(TAG, "clearing BLE bonding data");
     
     int dev_num = esp_ble_get_bond_device_num();
     if (dev_num > 0) {
@@ -390,13 +392,13 @@ void ble_keyboard_wrapper_clear_bonding(void) {
             esp_ble_get_bond_device_list(&dev_num, dev_list);
             for (int i = 0; i < dev_num; i++) {
                 esp_ble_remove_bond_device(dev_list[i].bd_addr);
-                ESP_LOGI(TAG, "Removed bonded device %d", i);
+                mclog::tagInfo(TAG, "removed bonded device {}", i);
             }
             free(dev_list);
         }
     }
     
-    ESP_LOGI(TAG, "Bonding data cleared (%d devices)", dev_num);
+    mclog::tagInfo(TAG, "bonding data cleared ({} devices)", dev_num);
 }
 
 const char* ble_keyboard_wrapper_get_device_name(void) {

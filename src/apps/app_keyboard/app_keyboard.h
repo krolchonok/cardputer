@@ -72,7 +72,6 @@ private:
     bool _is_tiktok_mode                 = false;
     bool _is_media_mode                  = false;
     bool _tiktok_mouse_positioned        = false;
-    bool _last_mouse_connected           = false;
     bool _show_help_menu                 = false;
     // Debounce for BLE keyboard connection reporting
     bool _ble_candidate_state            = false;
@@ -82,6 +81,15 @@ private:
     bool _ble_mouse_candidate_state      = false;
     uint32_t _ble_mouse_candidate_time   = 0;
     bool _ble_mouse_stable_connected     = false;
+
+    bool update_debounced_state(bool current_state,
+                                bool& stable_state,
+                                bool& candidate_state,
+                                uint32_t& candidate_time,
+                                uint32_t debounce_ms);
+    void log_connection_state(const char* label, bool connected);
+    void update_ble_connection_state();
+    bool update_ble_mouse_connection_state();
 
     void select_keyboard_type();
     void init_ble_keyboard();
