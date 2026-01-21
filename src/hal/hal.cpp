@@ -1047,6 +1047,13 @@ bool Hal::bleKeyboardIsInited() const
 
 void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
 {
+    mclog::tagDebug(_tag, "ble key event: code={} state={} modifier={} fn={} connected={}",
+                    static_cast<int>(keyEvent.keyCode),
+                    keyEvent.state ? 1 : 0,
+                    keyEvent.isModifier ? 1 : 0,
+                    GetHAL().keyboard.isFnActive() ? 1 : 0,
+                    bleKeyboardIsConnected() ? 1 : 0);
+
     // Only forward if BLE keyboard is connected
     if (!bleKeyboardIsConnected()) {
         return;

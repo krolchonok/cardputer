@@ -43,6 +43,11 @@ void Keyboard::update()
 {
     clearKeyEvent();
 
+    // Fallback polling: if the INT pin is miswired or not firing, check the event FIFO.
+    if (!_isr_flag && _tca8418 && _tca8418->available() > 0) {
+        _isr_flag = true;
+    }
+
     if (!_isr_flag) {
         return;
     }

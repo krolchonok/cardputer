@@ -31,14 +31,13 @@ static const char* TAG = "ble_kbd";
 #define REPORT_ID_CONSUMER   2
 
 // Combined HID Report Descriptor: Keyboard + Consumer Control
+// Match the proven ESP32 BLE Keyboard descriptor layout for compatibility.
 static const uint8_t hidReportDescriptor[] = {
     // ============== Keyboard ==============
     0x05, 0x01,        // Usage Page (Generic Desktop)
     0x09, 0x06,        // Usage (Keyboard)
     0xA1, 0x01,        // Collection (Application)
     0x85, REPORT_ID_KEYBOARD, //   Report ID (1)
-    
-    // Modifier keys (8 bits)
     0x05, 0x07,        //   Usage Page (Key Codes)
     0x19, 0xE0,        //   Usage Minimum (224) - Left Control
     0x29, 0xE7,        //   Usage Maximum (231) - Right GUI
@@ -47,27 +46,19 @@ static const uint8_t hidReportDescriptor[] = {
     0x75, 0x01,        //   Report Size (1)
     0x95, 0x08,        //   Report Count (8)
     0x81, 0x02,        //   Input (Data, Variable, Absolute)
-    
-    // Reserved byte
-    0x95, 0x01,        //   Report Count (1)
+    0x95, 0x01,        //   Report Count (1) ; Reserved
     0x75, 0x08,        //   Report Size (8)
     0x81, 0x01,        //   Input (Constant)
-    
-    // LED output report (for host to control Num Lock, Caps Lock, etc.)
-    0x95, 0x05,        //   Report Count (5)
+    0x95, 0x05,        //   Report Count (5) ; LEDs
     0x75, 0x01,        //   Report Size (1)
     0x05, 0x08,        //   Usage Page (LEDs)
     0x19, 0x01,        //   Usage Minimum (1)
     0x29, 0x05,        //   Usage Maximum (5)
     0x91, 0x02,        //   Output (Data, Variable, Absolute)
-    
-    // LED padding
-    0x95, 0x01,        //   Report Count (1)
+    0x95, 0x01,        //   Report Count (1) ; LED padding
     0x75, 0x03,        //   Report Size (3)
     0x91, 0x01,        //   Output (Constant)
-    
-    // Keycodes (6 bytes)
-    0x95, 0x06,        //   Report Count (6)
+    0x95, 0x06,        //   Report Count (6) ; Keycodes
     0x75, 0x08,        //   Report Size (8)
     0x15, 0x00,        //   Logical Minimum (0)
     0x25, 0x65,        //   Logical Maximum (101)
@@ -75,23 +66,35 @@ static const uint8_t hidReportDescriptor[] = {
     0x19, 0x00,        //   Usage Minimum (0)
     0x29, 0x65,        //   Usage Maximum (101)
     0x81, 0x00,        //   Input (Data, Array)
-    
     0xC0,              // End Collection
-    
+
     // ============== Consumer Control (Media Keys) ==============
     0x05, 0x0C,        // Usage Page (Consumer)
     0x09, 0x01,        // Usage (Consumer Control)
     0xA1, 0x01,        // Collection (Application)
     0x85, REPORT_ID_CONSUMER, //   Report ID (2)
-    
+    0x05, 0x0C,        //   Usage Page (Consumer)
     0x15, 0x00,        //   Logical Minimum (0)
-    0x26, 0xFF, 0x03,  //   Logical Maximum (1023)
-    0x19, 0x00,        //   Usage Minimum (0)
-    0x2A, 0xFF, 0x03,  //   Usage Maximum (1023)
-    0x75, 0x10,        //   Report Size (16)
-    0x95, 0x01,        //   Report Count (1)
-    0x81, 0x00,        //   Input (Data, Array)
-    
+    0x25, 0x01,        //   Logical Maximum (1)
+    0x75, 0x01,        //   Report Size (1)
+    0x95, 0x10,        //   Report Count (16)
+    0x09, 0xB5,        //   Usage (Scan Next Track) bit0
+    0x09, 0xB6,        //   Usage (Scan Previous Track) bit1
+    0x09, 0xB7,        //   Usage (Stop) bit2
+    0x09, 0xCD,        //   Usage (Play/Pause) bit3
+    0x09, 0xE2,        //   Usage (Mute) bit4
+    0x09, 0xE9,        //   Usage (Volume Increment) bit5
+    0x09, 0xEA,        //   Usage (Volume Decrement) bit6
+    0x0A, 0x23, 0x02,  //   Usage (WWW Home) bit7
+    0x0A, 0x94, 0x01,  //   Usage (My Computer) bit8
+    0x0A, 0x92, 0x01,  //   Usage (Calculator) bit9
+    0x0A, 0x2A, 0x02,  //   Usage (WWW fav) bit10
+    0x0A, 0x21, 0x02,  //   Usage (WWW search) bit11
+    0x0A, 0x26, 0x02,  //   Usage (WWW stop) bit12
+    0x0A, 0x24, 0x02,  //   Usage (WWW back) bit13
+    0x0A, 0x83, 0x01,  //   Usage (Media select) bit14
+    0x0A, 0x8A, 0x01,  //   Usage (Mail) bit15
+    0x81, 0x02,        //   Input (Data, Variable, Absolute)
     0xC0               // End Collection
 };
 
@@ -100,6 +103,7 @@ static BLEHIDDevice* hid = nullptr;
 static BLECharacteristic* inputKeyboard = nullptr;
 static BLECharacteristic* inputConsumer = nullptr;
 static BLECharacteristic* outputKeyboard = nullptr;
+static BLECharacteristic* bootKeyboard = nullptr;
 static BLE2902* inputKeyboardCccd = nullptr;
 static BLE2902* inputConsumerCccd = nullptr;
 static BLEServer* pServer = nullptr;
@@ -139,10 +143,10 @@ public:
     {
         mclog::tagInfo(TAG, "auth complete: success={}", cmpl.success ? 1 : 0);
         if (!cmpl.success) {
-            // Stop the reconnect loop on auth failures (Windows stale keys).
-            allowConnections = false;
-            autoAdvertise = false;
-            ble_keyboard_wrapper_stop_advertising();
+            // Keep advertising on auth failures to allow re-pairing.
+            allowConnections = true;
+            autoAdvertise = true;
+            ble_keyboard_wrapper_start_advertising();
             return;
         }
         if (inputKeyboardCccd) {
@@ -184,6 +188,19 @@ class BleKeyboardCallbacks : public BLEServerCallbacks {
         mclog::tagInfo(TAG, "client connected");
         currentState = BLE_HID_STATE_CONNECTED;
         disconnectBurst = 0;
+
+        if (inputKeyboardCccd) {
+            inputKeyboardCccd->setNotifications(true);
+        }
+        if (inputConsumerCccd) {
+            inputConsumerCccd->setNotifications(true);
+        }
+        if (bootKeyboard) {
+            BLE2902* bootCccd = (BLE2902*)bootKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+            if (bootCccd) {
+                bootCccd->setNotifications(true);
+            }
+        }
         
         // Stop advertising on connect
         BLEDevice::stopAdvertising();
@@ -281,12 +298,12 @@ bool ble_keyboard_wrapper_init(const char* deviceName) {
     // Using Espressif's vendor ID
     hid->pnp(0x02, 0x05AC, 0x820A, 0x0001);  // Apple-like for better compatibility
     
-    // HID info: country code = 0, flags = 0x02 (normally connectable)
-    hid->hidInfo(0x00, 0x02);
+    // HID info: country code = 0, flags = 0x01 (remote wake)
+    hid->hidInfo(0x00, 0x01);
     
     // Set security - Secure Connections bonding for Windows compatibility
     BLESecurity* pSecurity = new BLESecurity();
-    pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_BOND);
+    pSecurity->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
     pSecurity->setCapability(ESP_IO_CAP_NONE);
     pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
     pSecurity->setRespEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
@@ -302,6 +319,7 @@ bool ble_keyboard_wrapper_init(const char* deviceName) {
     inputConsumerCccd = new BLE2902();
     inputKeyboard->addDescriptor(inputKeyboardCccd);
     inputConsumer->addDescriptor(inputConsumerCccd);
+    bootKeyboard = hid->bootInput();
     
     // Create output report (for LED status)
     outputKeyboard = hid->outputReport(REPORT_ID_KEYBOARD);
@@ -348,6 +366,7 @@ void ble_keyboard_wrapper_deinit(void) {
     inputKeyboard = nullptr;
     inputConsumer = nullptr;
     outputKeyboard = nullptr;
+    bootKeyboard = nullptr;
     inputKeyboardCccd = nullptr;
     inputConsumerCccd = nullptr;
     pServer = nullptr;
@@ -532,6 +551,11 @@ static void sendKeyboardReport(void) {
     
     inputKeyboard->setValue(report, sizeof(report));
     inputKeyboard->notify();
+
+    if (bootKeyboard) {
+        bootKeyboard->setValue(report, sizeof(report));
+        bootKeyboard->notify();
+    }
 }
 
 void ble_keyboard_wrapper_press(uint8_t keyCode) {
@@ -575,6 +599,9 @@ void ble_keyboard_wrapper_release_all(void) {
 
 void ble_keyboard_wrapper_send_report(uint8_t mod, const uint8_t* keys) {
     if (!inputKeyboard || currentState != BLE_HID_STATE_CONNECTED) {
+        mclog::tagDebug(TAG, "send report skipped: input={} state={}",
+                        inputKeyboard ? 1 : 0,
+                        static_cast<int>(currentState));
         return;
     }
     
@@ -585,6 +612,11 @@ void ble_keyboard_wrapper_send_report(uint8_t mod, const uint8_t* keys) {
     } else {
         memset(pressedKeys, 0, sizeof(pressedKeys));
     }
+
+    mclog::tagDebug(TAG, "send report: mod=0x{:02X} keys={:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+                    mod,
+                    pressedKeys[0], pressedKeys[1], pressedKeys[2],
+                    pressedKeys[3], pressedKeys[4], pressedKeys[5]);
     
     sendKeyboardReport();
 }
@@ -594,14 +626,33 @@ void ble_keyboard_wrapper_send_media_key(uint16_t usageId, bool pressed) {
         return;
     }
     
-    uint8_t report[2] = {0};
-    
+    uint16_t mask = 0;
     if (pressed) {
-        report[0] = usageId & 0xFF;
-        report[1] = (usageId >> 8) & 0xFF;
+        switch (usageId) {
+            case 0x00B5: mask = 1u << 0; break; // Next Track
+            case 0x00B6: mask = 1u << 1; break; // Previous Track
+            case 0x00B7: mask = 1u << 2; break; // Stop
+            case 0x00CD: mask = 1u << 3; break; // Play/Pause
+            case 0x00E2: mask = 1u << 4; break; // Mute
+            case 0x00E9: mask = 1u << 5; break; // Volume Up
+            case 0x00EA: mask = 1u << 6; break; // Volume Down
+            case 0x0223: mask = 1u << 7; break; // WWW Home
+            case 0x0194: mask = 1u << 8; break; // My Computer
+            case 0x0192: mask = 1u << 9; break; // Calculator
+            case 0x022A: mask = 1u << 10; break; // WWW Favorites
+            case 0x0221: mask = 1u << 11; break; // WWW Search
+            case 0x0226: mask = 1u << 12; break; // WWW Stop
+            case 0x0224: mask = 1u << 13; break; // WWW Back
+            case 0x0183: mask = 1u << 14; break; // Media Select
+            case 0x018A: mask = 1u << 15; break; // Mail
+            default: mask = 0; break;
+        }
     }
-    // else report stays all zeros (key release)
-    
+
+    uint8_t report[2] = {
+        static_cast<uint8_t>(mask & 0xFF),
+        static_cast<uint8_t>((mask >> 8) & 0xFF)
+    };
     inputConsumer->setValue(report, sizeof(report));
     inputConsumer->notify();
 }
