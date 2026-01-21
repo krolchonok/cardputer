@@ -45,7 +45,7 @@ void setup()
     GetMooncake().installApp(std::make_unique<AppSettings>());
     GetMooncake().installApp(std::make_unique<AppDisplay>());
     GetMooncake().installApp(std::make_unique<AppClock>());
-    GetMooncake().installApp(std::make_unique<AppKeyboard>());
+    GetMooncake().installApp(std::make_unique<AppBleHid>());
     GetMooncake().installApp(std::make_unique<AppImu>());
     GetMooncake().installApp(std::make_unique<AppSdcard>());
     GetMooncake().installApp(std::make_unique<AppFileExplorer>());

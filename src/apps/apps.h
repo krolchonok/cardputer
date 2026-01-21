@@ -18,7 +18,7 @@
 #include "app_chat/app_chat.h"
 #include "app_set_wifi/app_set_wifi.h"
 #include "app_clock/app_clock.h"
-#include "app_keyboard/app_keyboard.h"
+#include "app_ble_hid/app_ble_hid.h"
 #include "app_imu/app_imu.h"
 #include "app_sdcard/app_sdcard.h"
 #include "app_file_explorer/app_file_explorer.h"

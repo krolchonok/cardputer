@@ -78,7 +78,7 @@ void Hal::feedTheDog()
 #endif
 }
 
-std::vector<uint8_t> Hal::getDeviceMac()
+std::vector<uint8_t> Hal::getDeviceMac() const
 {
     std::vector<uint8_t> mac(6);
 #if defined(ARDUINO)
@@ -92,13 +92,13 @@ std::vector<uint8_t> Hal::getDeviceMac()
     return mac;
 }
 
-std::string Hal::getDeviceMacString()
+std::string Hal::getDeviceMacString() const
 {
     auto mac = getDeviceMac();
     return fmt::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
-std::string Hal::getBleMacString()
+std::string Hal::getBleMacString() const
 {
     // BLE MAC is base MAC + 2
     auto mac = getDeviceMac();
@@ -880,6 +880,37 @@ void Hal::bleKeyboardInit()
 
     mclog::tagInfo(_tag, "ble keyboard init");
 
+    // Restore persisted random address if present
+    std::string saved_addr = getSettings().GetString("ble_rand_addr", "");
+    if (saved_addr.size() == 17) {
+        uint8_t addr[6] = {0};
+        int parsed = 0;
+        for (int i = 0; i < 6; ++i) {
+            char hi = saved_addr[i * 3];
+            char lo = saved_addr[i * 3 + 1];
+            if (saved_addr[i * 3 + 2] != ':' && i != 5) {
+                break;
+            }
+            auto hex = [](char c) -> int {
+                if (c >= '0' && c <= '9') return c - '0';
+                if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+                if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+                return -1;
+            };
+            int hi_n = hex(hi);
+            int lo_n = hex(lo);
+            if (hi_n < 0 || lo_n < 0) {
+                break;
+            }
+            addr[i] = static_cast<uint8_t>((hi_n << 4) | lo_n);
+            parsed++;
+        }
+        if (parsed == 6) {
+            ble_keyboard_wrapper_set_saved_address(addr);
+            mclog::tagInfo(_tag, "restored BLE random addr: {}", saved_addr);
+        }
+    }
+
     // Initialize unified BLE HID wrapper (keyboard + media)
     if (!ble_keyboard_wrapper_init("CardputerADV")) {
         mclog::tagError(_tag, "ble keyboard init failed");
@@ -939,6 +970,20 @@ void Hal::bleKeyboardStartAdvertising()
     }
 }
 
+void Hal::bleKeyboardStopAdvertising()
+{
+    if (_is_ble_keyboard_inited) {
+        ble_keyboard_wrapper_stop_advertising();
+    }
+}
+
+void Hal::bleKeyboardDisconnect()
+{
+    if (_is_ble_keyboard_inited) {
+        ble_keyboard_wrapper_disconnect();
+    }
+}
+
 void Hal::bleKeyboardSendMediaKey(uint16_t usageId, bool pressed)
 {
     if (!_is_ble_keyboard_inited || !ble_keyboard_wrapper_is_connected()) {
@@ -947,10 +992,68 @@ void Hal::bleKeyboardSendMediaKey(uint16_t usageId, bool pressed)
     ble_keyboard_wrapper_send_media_key(usageId, pressed);
 }
 
+void Hal::bleKeyboardSetAutoAdvertise(bool enabled)
+{
+    if (_is_ble_keyboard_inited) {
+        ble_keyboard_wrapper_set_auto_advertise(enabled);
+    }
+}
+
+bool Hal::bleKeyboardGetAutoAdvertise() const
+{
+    if (!_is_ble_keyboard_inited) {
+        return false;
+    }
+    return ble_keyboard_wrapper_get_auto_advertise();
+}
+
+void Hal::bleKeyboardSetAllowConnections(bool enabled)
+{
+    if (_is_ble_keyboard_inited) {
+        ble_keyboard_wrapper_set_allow_connections(enabled);
+    }
+}
+
+bool Hal::bleKeyboardGetAllowConnections() const
+{
+    if (!_is_ble_keyboard_inited) {
+        return false;
+    }
+    return ble_keyboard_wrapper_get_allow_connections();
+}
+
+bool Hal::bleKeyboardRotateAddress()
+{
+    if (!_is_ble_keyboard_inited) {
+        return false;
+    }
+    return ble_keyboard_wrapper_rotate_address();
+}
+
+std::string Hal::bleKeyboardGetAddressString() const
+{
+    uint8_t addr[6] = {0};
+    if (_is_ble_keyboard_inited && ble_keyboard_wrapper_get_address(addr, nullptr)) {
+        return fmt::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                           addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+    }
+    return getBleMacString();
+}
+
+bool Hal::bleKeyboardIsInited() const
+{
+    return _is_ble_keyboard_inited;
+}
+
 void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
 {
     // Only forward if BLE keyboard is connected
     if (!bleKeyboardIsConnected()) {
+        return;
+    }
+
+    // If Fn is held, reserve number keys for app hotkeys (do not forward to host)
+    if (GetHAL().keyboard.isFnActive() && keyEvent.keyCode >= KEY_1 && keyEvent.keyCode <= KEY_0) {
         return;
     }
 
@@ -1323,6 +1426,7 @@ Hal::SdCardProbeResult_t Hal::sdCardProbe()
 /*                                   BLE Mouse                                */
 /* -------------------------------------------------------------------------- */
 #include <hal/utils/ble_mouse_wrapper/ble_mouse_wrapper.h>
+#include <BLEDevice.h>
 
 static BleMouseWrapper* bleMouse = nullptr; // BLE Mouse instance
 
@@ -1348,6 +1452,8 @@ void Hal::bleMouseDeinit() {
     bleMouse->end();
     delete bleMouse;
     bleMouse = nullptr;
+    BLEDevice::deinit(true);
+    m5gfx::delay(120);
     _is_ble_mouse_inited = false;
     mclog::tagInfo(_tag, "BLE Mouse deinitialized");
 }
@@ -1395,4 +1501,8 @@ void Hal::bleMouseClearBonding() {
     mclog::tagInfo(_tag, "Clearing BLE bonding data...");
     BleMouseWrapper::clearBondingData();
     mclog::tagInfo(_tag, "BLE bonding data cleared");
+}
+
+bool Hal::bleMouseIsInited() const {
+    return _is_ble_mouse_inited;
 }

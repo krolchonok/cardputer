@@ -29,9 +29,9 @@ public:
         return m5gfx::millis();
     }
     void feedTheDog();
-    std::vector<uint8_t> getDeviceMac();
-    std::string getDeviceMacString();
-    std::string getBleMacString();
+    std::vector<uint8_t> getDeviceMac() const;
+    std::string getDeviceMacString() const;
+    std::string getBleMacString() const;
 
     /* --------------------------------- Display -------------------------------- */
     M5GFX& display                = M5.Display;
@@ -105,7 +105,16 @@ public:
     const char* getBleKeyboardName() const;
     void bleKeyboardClearBonding();
     void bleKeyboardStartAdvertising();
+    void bleKeyboardStopAdvertising();
+    void bleKeyboardDisconnect();
     void bleKeyboardSendMediaKey(uint16_t usageId, bool pressed);
+    void bleKeyboardSetAutoAdvertise(bool enabled);
+    bool bleKeyboardGetAutoAdvertise() const;
+    void bleKeyboardSetAllowConnections(bool enabled);
+    bool bleKeyboardGetAllowConnections() const;
+    bool bleKeyboardRotateAddress();
+    std::string bleKeyboardGetAddressString() const;
+    bool bleKeyboardIsInited() const;
 
     /* ----------------------------------- USB ---------------------------------- */
     void usbKeyboardInit();
@@ -156,6 +165,7 @@ public:
     void bleMouseCenterCursor();
     const std::string& getBleMouseName() const;
     void bleMouseClearBonding();  // Clear all BLE bonding data
+    bool bleMouseIsInited() const;
 
 private:
     static constexpr int k_canvas_width_with_bar = 204;

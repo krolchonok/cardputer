@@ -47,6 +47,50 @@ bool ble_keyboard_wrapper_is_connected(void);
 BleHidState_t ble_keyboard_wrapper_get_state(void);
 
 /**
+ * @brief Enable/disable auto advertising restart on disconnect.
+ * @param enabled true to restart advertising on disconnect
+ */
+void ble_keyboard_wrapper_set_auto_advertise(bool enabled);
+
+/**
+ * @brief Get auto advertising restart setting.
+ * @return true if auto advertising on disconnect is enabled
+ */
+bool ble_keyboard_wrapper_get_auto_advertise(void);
+
+/**
+ * @brief Allow or reject new connections.
+ * @param enabled true to allow new connections
+ */
+void ble_keyboard_wrapper_set_allow_connections(bool enabled);
+
+/**
+ * @brief Get allow-connections setting.
+ * @return true if new connections are allowed
+ */
+bool ble_keyboard_wrapper_get_allow_connections(void);
+
+/**
+ * @brief Rotate to a new static random BLE address.
+ * @return true on success
+ */
+bool ble_keyboard_wrapper_rotate_address(void);
+
+/**
+ * @brief Get current BLE address used by this wrapper.
+ * @param out_addr 6-byte buffer to receive address (LSB first)
+ * @param is_random optional flag set when random address is used
+ * @return true on success
+ */
+bool ble_keyboard_wrapper_get_address(uint8_t* out_addr, bool* is_random);
+
+/**
+ * @brief Set persisted random address (no BLE calls).
+ * @param addr 6-byte address, most significant byte first
+ */
+void ble_keyboard_wrapper_set_saved_address(const uint8_t* addr);
+
+/**
  * @brief Start BLE advertising if not already advertising.
  */
 void ble_keyboard_wrapper_start_advertising(void);
@@ -55,6 +99,11 @@ void ble_keyboard_wrapper_start_advertising(void);
  * @brief Stop BLE advertising.
  */
 void ble_keyboard_wrapper_stop_advertising(void);
+
+/**
+ * @brief Disconnect active BLE host (if any) and stop advertising.
+ */
+void ble_keyboard_wrapper_disconnect(void);
 
 /**
  * @brief Press a key (will be held until released).

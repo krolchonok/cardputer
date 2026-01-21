@@ -226,6 +226,14 @@ Keyboard::KeyEvent_t Keyboard::convertToKeyEvent(const KeyEventRaw_t& key)
 
     ret.state = key.state;
 
+    // Dedicated ESC key position (row 0, col 0)
+    if (key.row == 0 && key.col == 0) {
+        ret.keyCode = KEY_ESC;
+        ret.keyName = "Esc";
+        ret.isModifier = false;
+        return ret;
+    }
+
     // If this is the Fn key itself, always emit no key (modifier only)
     // This ensures release events are not treated as Shift
     if (key.row == 2 && key.col == 0) {
@@ -246,6 +254,12 @@ Keyboard::KeyEvent_t Keyboard::convertToKeyEvent(const KeyEventRaw_t& key)
             return ret;
         }
         if (key.row == 3 && key.col == 13) { // row 4 pos 13 => Delete
+            ret.keyCode = KEY_DELETE;
+            ret.keyName = "Del";
+            ret.isModifier = false;
+            return ret;
+        }
+        if (key.row == 0 && key.col == 13) { // row 1 pos 13 => Backspace -> Delete
             ret.keyCode = KEY_DELETE;
             ret.keyName = "Del";
             ret.isModifier = false;
