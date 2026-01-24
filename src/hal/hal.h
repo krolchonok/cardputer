@@ -150,6 +150,18 @@ public:
 
     SdCardProbeResult_t sdCardProbe();
 
+    /* ---------------------------------- Logging ------------------------------- */
+    bool enableSdLog(const std::string& filepath = "/logs/log.txt");
+    void disableSdLog();
+    bool isSdLogEnabled() const
+    {
+        return _sd_log_enabled;
+    }
+    const std::string& getSdLogPath() const
+    {
+        return _sd_log_path;
+    }
+
     /* ----------------------------------- BLE Mouse ---------------------------------- */
     void bleMouseInit();
     void bleMouseInitWithName(const std::string& deviceName);
@@ -176,6 +188,9 @@ private:
     bool _is_usb_keyboard_inited    = false;
     bool _is_ble_mouse_inited       = false;
     bool _is_sd_card_mounted        = false;
+    bool _sd_log_enabled            = false;
+    size_t _sd_log_slot_id          = 0;
+    std::string _sd_log_path;
     int _ble_keyboard_event_slot_id = -1;
     int _usb_keyboard_event_slot_id = -1;
     bool _keyboard_bar_visible      = true;

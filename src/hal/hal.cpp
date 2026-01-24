@@ -1320,6 +1320,65 @@ Hal::SdCardProbeResult_t Hal::sdCardProbe()
     return result;
 }
 
+bool Hal::enableSdLog(const std::string& filepath)
+{
+    if (_sd_log_enabled) {
+        disableSdLog();
+    }
+
+    _sd_log_path = filepath.empty() ? "/logs/log.txt" : filepath;
+
+    if (!_is_sd_card_mounted) {
+        sd_card_init();
+    }
+    if (!_is_sd_card_mounted) {
+        return false;
+    }
+
+    auto ensure_dir = [](const std::string& path) -> bool {
+        size_t slash_pos = path.find_last_of('/');
+        if (slash_pos == std::string::npos || slash_pos == 0) {
+            return true;
+        }
+        std::string dir = path.substr(0, slash_pos);
+        if (SD.exists(dir.c_str())) {
+            return true;
+        }
+        return SD.mkdir(dir.c_str());
+    };
+
+    if (!ensure_dir(_sd_log_path)) {
+        return false;
+    }
+
+    _sd_log_slot_id = mclog::on_log.connect([this](mclog::LogLevel_t level, const std::string& msg) {
+        (void)level;
+        if (!_is_sd_card_mounted) {
+            return;
+        }
+        File fp = SD.open(_sd_log_path.c_str(), FILE_WRITE);
+        if (!fp) {
+            return;
+        }
+        fp.print(msg.c_str());
+        fp.print("\r\n");
+        fp.close();
+    });
+
+    _sd_log_enabled = true;
+    return true;
+}
+
+void Hal::disableSdLog()
+{
+    if (!_sd_log_enabled) {
+        return;
+    }
+    mclog::on_log.disconnect(_sd_log_slot_id);
+    _sd_log_slot_id = 0;
+    _sd_log_enabled = false;
+}
+
 #else
 // https://github.com/espressif/esp-idf/blob/v5.3.3/examples/storage/sd_card/sdspi
 // https://github.com/m5stack/M5PaperS3-UserDemo/blob/main/main/hal/hal.h
@@ -1425,6 +1484,16 @@ Hal::SdCardProbeResult_t Hal::sdCardProbe()
     result.name = fmt::format("Name: {}", std::string(_sd_card->cid.name));
 
     return result;
+}
+
+bool Hal::enableSdLog(const std::string& filepath)
+{
+    (void)filepath;
+    return false;
+}
+
+void Hal::disableSdLog()
+{
 }
 #endif
 
