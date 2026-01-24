@@ -14,14 +14,9 @@ set(MY_INCLUDE_DIRS
     "./apps"
 )
 
-set(PIKA_PYTHON_INCS
-    ./apps/app_repl/PikaScript/pikascript-api/
-    ./apps/app_repl/PikaScript/pikascript-core/
-)
-
 file(GLOB EXTERN_FILES assets/*)
 
 idf_component_register(SRCS "main.cpp" ${MY_SRCS}
-                    INCLUDE_DIRS ${MY_INCLUDE_DIRS} ${PIKA_PYTHON_INCS}
+                    INCLUDE_DIRS ${MY_INCLUDE_DIRS}
                     EMBED_FILES ${EXTERN_FILES}
 )

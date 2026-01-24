@@ -59,7 +59,6 @@ void Hal::update()
 {
     M5.update();
     keyboard.update();
-    capLora868.update();
     
     // Check background WiFi connection status
     if (_is_wifi_inited && !_is_wifi_connected && WiFi.status() == WL_CONNECTED) {

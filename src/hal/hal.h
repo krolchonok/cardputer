@@ -5,7 +5,6 @@
  */
 #pragma once
 #include "keyboard/keyboard.h"
-#include "cap_lora868/cap_lora868.h"
 #include "utils/settings/settings.h"
 #include <M5Unified.hpp>
 #include <M5GFX.h>
@@ -151,9 +150,6 @@ public:
 
     SdCardProbeResult_t sdCardProbe();
 
-    /* ----------------------------------- Cap ---------------------------------- */
-    CapLoRa868 capLora868;
-
     /* ----------------------------------- BLE Mouse ---------------------------------- */
     void bleMouseInit();
     void bleMouseInitWithName(const std::string& deviceName);
@@ -185,8 +181,6 @@ private:
     bool _keyboard_bar_visible      = true;
     int _keyboard_bar_width         = 0;
     int _system_bar_height          = 0;
-
-    std::unique_ptr<CapLoRa868> _cap_lora868;
 
     void display_init();
     void applyDisplayLayout();

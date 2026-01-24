@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 #pragma once
-#include <apps/app_repl/view/repl_view.h>
+#include <apps/utils/repl_view.h>
 #include <mooncake.h>
 #include <cstdint>
 #include <hal/hal.h>

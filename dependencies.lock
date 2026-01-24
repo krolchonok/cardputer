@@ -55,21 +55,10 @@ dependencies:
     source:
       type: idf
     version: 5.4.2
-  jgromes/radiolib:
-    component_hash: 7e367fd420aa66da05687e00dc3775c5891cd8236eee56d9d797d6eb04bb1918
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=4.1'
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    version: 7.2.1
 direct_dependencies:
 - espressif/esp-now
 - espressif/esp_tinyusb
 - idf
-- jgromes/radiolib
 manifest_hash: 11dfa23746cd56272c7e2231f3316fed15687713e403eee1876bad6e4bb0f037
 target: esp32s3
 version: 2.0.0
