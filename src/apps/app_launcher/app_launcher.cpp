@@ -31,6 +31,22 @@ void Launcher::onCreate()
     start_keyboard_bar();
 
     open();
+    
+    // Check if we need to auto-open BLE HID after profile switch reboot
+    if (GetHAL().getSettings().GetInt("ble_auto", 0) == 1) {
+        GetHAL().getSettings().SetInt("ble_auto", 0);  // Clear flag
+        // Find BLE HID app and open it
+        auto abilities = GetMooncake().getAppAbilityManager()->getAllAbilityInstance();
+        for (auto* ability : abilities) {
+            if (ability->abilityType() == mooncake::AbilityType_App) {
+                auto* app = static_cast<mooncake::AppAbility*>(ability);
+                if (app->getAppInfo().name == "BLE HID") {
+                    handle_app_open(0, app->getId());
+                    break;
+                }
+            }
+        }
+    }
 }
 
 void Launcher::onRunning()

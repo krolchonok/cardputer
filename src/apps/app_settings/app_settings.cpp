@@ -27,6 +27,7 @@ void AppSettings::onOpen()
 
     _selected_index = 0;
     _sfx_enabled    = audio::get_keyboard_sfx_enabled();
+    _sd_log_enabled = GetHAL().getSettings().GetInt("sd_log_enabled", 1) != 0;
     _sfx_volume     = static_cast<uint8_t>(
         std::clamp<int>((audio::get_keyboard_sfx_volume() * 10 + 127) / 255, 0, 10));
 
@@ -76,6 +77,8 @@ void AppSettings::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
     if (keyEvent.row == 3 && keyEvent.col == 10) {
         if (_selected_index == 0) {
             toggle_sfx();
+        } else if (_selected_index == 2) {
+            toggle_sd_log();
         } else {
             adjust_volume(-k_volume_step);
         }
@@ -84,6 +87,8 @@ void AppSettings::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
     if (keyEvent.row == 3 && keyEvent.col == 12) {
         if (_selected_index == 0) {
             toggle_sfx();
+        } else if (_selected_index == 2) {
+            toggle_sd_log();
         } else {
             adjust_volume(k_volume_step);
         }
@@ -92,6 +97,8 @@ void AppSettings::handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent)
     if (keyEvent.row == 2 && keyEvent.col == 13) {
         if (_selected_index == 0) {
             toggle_sfx();
+        } else if (_selected_index == 2) {
+            toggle_sd_log();
         }
         return;
     }
@@ -122,6 +129,22 @@ void AppSettings::adjust_volume(int delta)
     }
 }
 
+void AppSettings::toggle_sd_log()
+{
+    if (_sd_log_enabled) {
+        GetHAL().disableSdLog();
+        _sd_log_enabled = false;
+    } else {
+        _sd_log_enabled = GetHAL().enableSdLog();
+        if (!_sd_log_enabled) {
+            mclog::tagError(getAppInfo().name, "failed to enable SD logging");
+        }
+    }
+
+    GetHAL().getSettings().SetInt("sd_log_enabled", _sd_log_enabled ? 1 : 0);
+    render_interface();
+}
+
 void AppSettings::render_interface()
 {
     GetHAL().canvas.fillScreen(THEME_COLOR_BG);
@@ -149,6 +172,8 @@ void AppSettings::render_interface()
             GetHAL().canvas.printf("Key click sound: %s", _sfx_enabled ? "On" : "Off");
         } else if (i == 1) {
             GetHAL().canvas.printf("Key click volume: %u", _sfx_volume);
+        } else if (i == 2) {
+            GetHAL().canvas.printf("SD log to file: %s", _sd_log_enabled ? "On" : "Off");
         }
     }
 

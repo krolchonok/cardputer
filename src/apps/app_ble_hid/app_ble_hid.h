@@ -31,6 +31,14 @@ private:
         TikTokDrag,
         MouseCenter,
         KickClient,
+        AutoStartKeyboard,
+        AutoStartMedia,
+        AutoStartMouse,
+        SwitchProfile1,
+        SwitchProfile2,
+        SwitchProfile3,
+        SwitchProfile4,
+        SwitchProfile5,
     };
 
     enum class ScreenType {
@@ -54,7 +62,11 @@ private:
     void toggle_ble_mouse();
     void media_tap(uint16_t usage_id);
     void tiktok_drag_down();
+    void switch_profile(int profile);
+    void load_current_profile();
+    void generate_profile_address(int profile, uint8_t* addr);
 
+    static constexpr int kNumProfiles = 5;
     int _key_event_slot_id = -1;
     int _key_event_raw_slot_id = -1;
     bool _ble_keyboard_on = false;
@@ -64,5 +76,6 @@ private:
     ActionType _pending_action = ActionType::None;
     ScreenType _screen = ScreenType::Main;
     int _menu_index = 0;
+    int _current_profile = 0;
     std::string _status;
 };

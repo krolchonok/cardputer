@@ -26,6 +26,7 @@ public:
     void showMessage(const std::string& message, uint16_t color = TFT_WHITE);
     void showPrompt(const std::string& prompt_text = ">>> ");
     void setPromptText(const std::string& prompt);
+    void refreshPrompt();
 
     void setInputBuffer(const std::string& text);
     const std::string& getInputBuffer() const

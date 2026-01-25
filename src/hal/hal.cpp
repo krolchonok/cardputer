@@ -881,6 +881,7 @@ void Hal::bleKeyboardInit()
 
     // Restore persisted random address if present
     std::string saved_addr = getSettings().GetString("ble_rand_addr", "");
+    const bool use_rand_addr = getSettings().GetInt("ble_use_rand_addr", 0) != 0;
     if (saved_addr.size() == 17) {
         uint8_t addr[6] = {0};
         int parsed = 0;
@@ -905,8 +906,12 @@ void Hal::bleKeyboardInit()
             parsed++;
         }
         if (parsed == 6) {
-            ble_keyboard_wrapper_set_saved_address(addr);
-            mclog::tagInfo(_tag, "restored BLE random addr: {}", saved_addr);
+            if (use_rand_addr) {
+                ble_keyboard_wrapper_set_saved_address(addr);
+                mclog::tagInfo(_tag, "restored BLE random addr: {}", saved_addr);
+            } else {
+                mclog::tagInfo(_tag, "saved BLE random addr ignored (ble_use_rand_addr=0)");
+            }
         }
     }
 
@@ -1046,13 +1051,6 @@ bool Hal::bleKeyboardIsInited() const
 
 void Hal::handle_ble_keyboard_event(const Keyboard::KeyEvent_t& keyEvent)
 {
-    mclog::tagDebug(_tag, "ble key event: code={} state={} modifier={} fn={} connected={}",
-                    static_cast<int>(keyEvent.keyCode),
-                    keyEvent.state ? 1 : 0,
-                    keyEvent.isModifier ? 1 : 0,
-                    GetHAL().keyboard.isFnActive() ? 1 : 0,
-                    bleKeyboardIsConnected() ? 1 : 0);
-
     // Only forward if BLE keyboard is connected
     if (!bleKeyboardIsConnected()) {
         return;
@@ -1326,7 +1324,14 @@ bool Hal::enableSdLog(const std::string& filepath)
         disableSdLog();
     }
 
-    _sd_log_path = filepath.empty() ? "/logs/log.txt" : filepath;
+    if (!filepath.empty() && filepath != "/logs/log.txt") {
+        _sd_log_path = filepath;
+    } else {
+        int32_t session_id = getSettings().GetInt("sd_log_session", 0);
+        session_id += 1;
+        getSettings().SetInt("sd_log_session", session_id);
+        _sd_log_path = fmt::format("/logs/log_{:05}.txt", session_id);
+    }
 
     if (!_is_sd_card_mounted) {
         sd_card_init();

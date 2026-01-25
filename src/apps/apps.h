@@ -27,3 +27,4 @@
 #include "app_settings/app_settings.h"
 #include "app_display/app_display.h"
 #include "app_web_server/app_web_server.h"
+#include "app_uart_monitor/app_uart_monitor.h"

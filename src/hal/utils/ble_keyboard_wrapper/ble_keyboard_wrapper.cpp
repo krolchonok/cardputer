@@ -141,21 +141,8 @@ public:
     bool onSecurityRequest() override { return true; }
     void onAuthenticationComplete(esp_ble_auth_cmpl_t cmpl) override
     {
-        mclog::tagInfo(TAG, "auth complete: success={}", cmpl.success ? 1 : 0);
-        if (!cmpl.success) {
-            // Keep advertising on auth failures to allow re-pairing.
-            allowConnections = true;
-            autoAdvertise = true;
-            ble_keyboard_wrapper_start_advertising();
-            return;
-        }
-        if (inputKeyboardCccd) {
-            inputKeyboardCccd->setNotifications(true);
-        }
-        if (inputConsumerCccd) {
-            inputConsumerCccd->setNotifications(true);
-        }
-        ble_keyboard_wrapper_release_all();
+        (void)cmpl;
+        // Avoid BLE calls/logging here; some stacks crash when invoked from auth callback.
     }
     bool onConfirmPIN(uint32_t pin) override
     {
@@ -171,6 +158,11 @@ static uint8_t pressedKeys[6] = {0};
 static uint8_t modifiers = 0;
 static uint16_t lastConnId = 0xFFFF;
 
+static void log_key_state(const char* reason);
+
+// Forward declaration for delayed CCCD enable
+static void enableNotificationsDelayed(void* param);
+
 // Connection callbacks
 class BleKeyboardCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) override {
@@ -185,22 +177,44 @@ class BleKeyboardCallbacks : public BLEServerCallbacks {
             return;
         }
         lastConnId = connId;
-        mclog::tagInfo(TAG, "client connected");
+        mclog::tagInfo(TAG, "client connected: conn_id={} allow={} auto_adv={}", connId,
+                       allowConnections ? 1 : 0, autoAdvertise ? 1 : 0);
         currentState = BLE_HID_STATE_CONNECTED;
         disconnectBurst = 0;
 
-        if (inputKeyboardCccd) {
-            inputKeyboardCccd->setNotifications(true);
-        }
-        if (inputConsumerCccd) {
-            inputConsumerCccd->setNotifications(true);
-        }
-        if (bootKeyboard) {
-            BLE2902* bootCccd = (BLE2902*)bootKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
-            if (bootCccd) {
-                bootCccd->setNotifications(true);
+        // For bonded devices reconnecting after reboot, the host won't re-enable notifications
+        // because it thinks they are still enabled. We need to force-enable them on our side.
+        // Use a short delay to let the connection stabilize before enabling.
+        xTaskCreate([](void* param) {
+            vTaskDelay(pdMS_TO_TICKS(500));  // Wait for connection to stabilize
+            
+            if (currentState != BLE_HID_STATE_CONNECTED) {
+                vTaskDelete(NULL);
+                return;
             }
-        }
+            
+            mclog::tagInfo(TAG, "enabling notifications for reconnected device");
+            
+            // Force enable notifications on keyboard input
+            if (inputKeyboardCccd) {
+                inputKeyboardCccd->setNotifications(true);
+            }
+            
+            // Force enable notifications on consumer input
+            if (inputConsumerCccd) {
+                inputConsumerCccd->setNotifications(true);
+            }
+            
+            // Force enable notifications on boot keyboard
+            if (bootKeyboard) {
+                BLE2902* bootCccd = (BLE2902*)bootKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+                if (bootCccd) {
+                    bootCccd->setNotifications(true);
+                }
+            }
+            
+            vTaskDelete(NULL);
+        }, "ble_cccd_init", 4096, NULL, 1, NULL);
         
         // Stop advertising on connect
         BLEDevice::stopAdvertising();
@@ -208,7 +222,7 @@ class BleKeyboardCallbacks : public BLEServerCallbacks {
 
     
     void onDisconnect(BLEServer* pServer) override {
-        mclog::tagInfo(TAG, "client disconnected");
+        mclog::tagInfo(TAG, "client disconnected: conn_id={}", pServer ? pServer->getConnId() : 0xFFFF);
         currentState = BLE_HID_STATE_IDLE;
         lastConnId = 0xFFFF;
         
@@ -242,20 +256,37 @@ class BleKeyboardCallbacks : public BLEServerCallbacks {
 
 static BleKeyboardCallbacks serverCallbacks;
 
+static void log_key_state(const char* reason)
+{
+    mclog::tagDebug(TAG, "key state {}: mod=0x{:02X} keys={:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+                    reason ? reason : "",
+                    modifiers,
+                    pressedKeys[0], pressedKeys[1], pressedKeys[2],
+                    pressedKeys[3], pressedKeys[4], pressedKeys[5]);
+}
+
+class InputReportCallbacks : public BLECharacteristicCallbacks {
+    void onStatus(BLECharacteristic* pCharacteristic, Status s, uint32_t code) override
+    {
+        (void)pCharacteristic;
+        if (s == BLECharacteristicCallbacks::Status::SUCCESS_NOTIFY ||
+            s == BLECharacteristicCallbacks::Status::SUCCESS_INDICATE) {
+            return;
+        }
+        mclog::tagWarn(TAG, "notify status: s={} code={}", static_cast<int>(s), code);
+    }
+};
+
+static InputReportCallbacks inputReportCallbacks;
+
 // Output report callback (for LED status from host)
 class OutputReportCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) override {
         uint8_t* data = pCharacteristic->getData();
         size_t len = pCharacteristic->getLength();
-        if (len > 0) {
-            mclog::tagDebug(TAG, "LED status: 0x{:02X}", data[0]);
-            // data[0] contains LED state:
-            // bit 0: Num Lock
-            // bit 1: Caps Lock
-            // bit 2: Scroll Lock
-            // bit 3: Compose
-            // bit 4: Kana
-        }
+        (void)data;
+        (void)len;
+        // Avoid logging here; some BLE stacks call this in BTC task context.
     }
 };
 
@@ -276,7 +307,7 @@ bool ble_keyboard_wrapper_init(const char* deviceName) {
     // Initialize BLE
     BLEDevice::init(deviceNameBuffer);
     allowConnections = true;
-    BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT_NO_MITM);
+    BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
     BLEDevice::setSecurityCallbacks(&securityCallbacks);
     
     // Set power level for better range
@@ -295,15 +326,15 @@ bool ble_keyboard_wrapper_init(const char* deviceName) {
     hid->manufacturer()->setValue("M5Stack");
     
     // Set PnP info (vendor ID, product ID, version)
-    // Using Espressif's vendor ID
-    hid->pnp(0x02, 0x05AC, 0x820A, 0x0001);  // Apple-like for better compatibility
+    // Use generic BLE keyboard IDs for broad compatibility.
+    hid->pnp(0x02, 0xE502, 0xA111, 0x0100);
     
     // HID info: country code = 0, flags = 0x01 (remote wake)
     hid->hidInfo(0x00, 0x01);
     
-    // Set security - Secure Connections bonding for Windows compatibility
+    // Set security - bonding for HID compatibility
     BLESecurity* pSecurity = new BLESecurity();
-    pSecurity->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
+    pSecurity->setAuthenticationMode(ESP_LE_AUTH_BOND);
     pSecurity->setCapability(ESP_IO_CAP_NONE);
     pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
     pSecurity->setRespEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
@@ -312,20 +343,23 @@ bool ble_keyboard_wrapper_init(const char* deviceName) {
     // Set report map
     hid->reportMap((uint8_t*)hidReportDescriptor, sizeof(hidReportDescriptor));
     
-    // Create input reports
+    // Create input reports (BLEHIDDevice::inputReport already creates BLE2902 descriptors)
     inputKeyboard = hid->inputReport(REPORT_ID_KEYBOARD);
     inputConsumer = hid->inputReport(REPORT_ID_CONSUMER);
-    inputKeyboardCccd = new BLE2902();
-    inputConsumerCccd = new BLE2902();
-    inputKeyboard->addDescriptor(inputKeyboardCccd);
-    inputConsumer->addDescriptor(inputConsumerCccd);
+    
+    // Get the automatically created CCCD descriptors
+    inputKeyboardCccd = (BLE2902*)inputKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+    inputConsumerCccd = (BLE2902*)inputConsumer->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+    
+    inputKeyboard->setCallbacks(&inputReportCallbacks);
+    inputConsumer->setCallbacks(&inputReportCallbacks);
     bootKeyboard = hid->bootInput();
     
     // Create output report (for LED status)
     outputKeyboard = hid->outputReport(REPORT_ID_KEYBOARD);
-    // Allow 2-byte writes (Report ID + LED byte) for Windows hosts.
-    uint8_t zero_out[2] = {0, 0};
-    outputKeyboard->setValue(zero_out, sizeof(zero_out));
+    // Output report is a single LED byte (no Report ID in payload).
+    uint8_t zero_out = 0;
+    outputKeyboard->setValue(&zero_out, 1);
     outputKeyboard->setCallbacks(&outputCallbacks);
     
     // Start HID services
@@ -465,6 +499,8 @@ void ble_keyboard_wrapper_set_saved_address(const uint8_t* addr) {
 
 void ble_keyboard_wrapper_start_advertising(void) {
     if (!isInitialized || !pServer) {
+        mclog::tagWarn(TAG, "start advertising skipped: inited={} server={}", isInitialized ? 1 : 0,
+                       pServer ? 1 : 0);
         return;
     }
     
@@ -486,6 +522,9 @@ void ble_keyboard_wrapper_start_advertising(void) {
         esp_err_t err = esp_ble_gap_set_rand_addr(lastRandAddr);
         if (err == ESP_OK) {
             pAdvertising->setDeviceAddress(lastRandAddr, BLE_ADDR_TYPE_RANDOM);
+            mclog::tagInfo(TAG, "adv using random addr {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                           lastRandAddr[5], lastRandAddr[4], lastRandAddr[3],
+                           lastRandAddr[2], lastRandAddr[1], lastRandAddr[0]);
         } else {
             mclog::tagError(TAG, "set rand addr failed (adv): {}", esp_err_to_name(err));
             hasRandAddr = false;
@@ -543,15 +582,19 @@ static void sendKeyboardReport(void) {
         return;
     }
     
-    // Keyboard report: [modifiers, reserved, key1, key2, key3, key4, key5, key6]
+    // Keyboard report: [modifiers, reserved, key1..key6]
     uint8_t report[8] = {0};
     report[0] = modifiers;
     report[1] = 0;  // Reserved
     memcpy(&report[2], pressedKeys, 6);
     
+    // Always set the value (for hosts that read directly)
     inputKeyboard->setValue(report, sizeof(report));
+    
+    // Try to notify - this will work if notifications are enabled
     inputKeyboard->notify();
 
+    // Also send via boot keyboard protocol for maximum compatibility
     if (bootKeyboard) {
         bootKeyboard->setValue(report, sizeof(report));
         bootKeyboard->notify();
@@ -570,6 +613,7 @@ void ble_keyboard_wrapper_press(uint8_t keyCode) {
     for (int i = 0; i < 6; i++) {
         if (pressedKeys[i] == 0) {
             pressedKeys[i] = keyCode;
+            log_key_state("press");
             sendKeyboardReport();
             return;
         }
@@ -578,6 +622,7 @@ void ble_keyboard_wrapper_press(uint8_t keyCode) {
     // No empty slot, replace oldest (first)
     memmove(&pressedKeys[0], &pressedKeys[1], 5);
     pressedKeys[5] = keyCode;
+    log_key_state("press overflow");
     sendKeyboardReport();
 }
 
@@ -585,6 +630,7 @@ void ble_keyboard_wrapper_release(uint8_t keyCode) {
     for (int i = 0; i < 6; i++) {
         if (pressedKeys[i] == keyCode) {
             pressedKeys[i] = 0;
+            log_key_state("release");
             sendKeyboardReport();
             return;
         }
@@ -599,9 +645,6 @@ void ble_keyboard_wrapper_release_all(void) {
 
 void ble_keyboard_wrapper_send_report(uint8_t mod, const uint8_t* keys) {
     if (!inputKeyboard || currentState != BLE_HID_STATE_CONNECTED) {
-        mclog::tagDebug(TAG, "send report skipped: input={} state={}",
-                        inputKeyboard ? 1 : 0,
-                        static_cast<int>(currentState));
         return;
     }
     
@@ -612,17 +655,15 @@ void ble_keyboard_wrapper_send_report(uint8_t mod, const uint8_t* keys) {
     } else {
         memset(pressedKeys, 0, sizeof(pressedKeys));
     }
-
-    mclog::tagDebug(TAG, "send report: mod=0x{:02X} keys={:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
-                    mod,
-                    pressedKeys[0], pressedKeys[1], pressedKeys[2],
-                    pressedKeys[3], pressedKeys[4], pressedKeys[5]);
     
     sendKeyboardReport();
 }
 
 void ble_keyboard_wrapper_send_media_key(uint16_t usageId, bool pressed) {
     if (!inputConsumer || currentState != BLE_HID_STATE_CONNECTED) {
+        mclog::tagDebug(TAG, "send media skipped: input={} state={} usage=0x{:04X} pressed={}",
+                        inputConsumer ? 1 : 0, static_cast<int>(currentState),
+                        usageId, pressed ? 1 : 0);
         return;
     }
     

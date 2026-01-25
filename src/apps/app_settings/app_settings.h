@@ -18,16 +18,18 @@ public:
     void onClose() override;
 
 private:
-    static constexpr int k_item_count = 2;
+    static constexpr int k_item_count = 3;
     static constexpr int k_volume_step = 1;
 
     int _key_event_slot_id = -1;
     int _selected_index    = 0;
     bool _sfx_enabled      = true;
+    bool _sd_log_enabled   = false;
     uint8_t _sfx_volume    = 10;
 
     void handle_key_event(const Keyboard::KeyEventRaw_t& keyEvent);
     void render_interface();
     void toggle_sfx();
     void adjust_volume(int delta);
+    void toggle_sd_log();
 };

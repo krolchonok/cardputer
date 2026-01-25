@@ -26,6 +26,10 @@ void setup()
     // HAL init
     GetHAL().init();
 
+    if (GetHAL().getSettings().GetInt("sd_log_enabled", 1) != 0) {
+        GetHAL().enableSdLog();
+    }
+
     // Setup ui hal
     ui_hal::on_delay([](uint32_t ms) { GetHAL().delay(ms); });
     ui_hal::on_get_tick([]() { return GetHAL().millis(); });
@@ -40,6 +44,7 @@ void setup()
     GetMooncake().installApp(std::make_unique<AppRecord>());
     GetMooncake().installApp(std::make_unique<AppChat>());
     GetMooncake().installApp(std::make_unique<AppRemote>());
+    GetMooncake().installApp(std::make_unique<AppUartMonitor>());
     GetMooncake().installApp(std::make_unique<AppSetWiFi>());
     GetMooncake().installApp(std::make_unique<AppSettingsMenu>());
     GetMooncake().installApp(std::make_unique<AppSettings>());

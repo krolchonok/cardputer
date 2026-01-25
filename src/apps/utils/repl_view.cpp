@@ -57,6 +57,11 @@ void ReplView::setPromptText(const std::string& prompt)
     _prompt_text = prompt;
 }
 
+void ReplView::refreshPrompt()
+{
+    render_prompt();
+}
+
 void ReplView::setInputBuffer(const std::string& text)
 {
     _input_buffer = text;
