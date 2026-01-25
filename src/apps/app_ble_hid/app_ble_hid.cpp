@@ -97,9 +97,6 @@ void AppBleHid::onRunning()
             case ActionType::MediaNext:
                 media_tap(kHidConsumerScanNext);
                 break;
-            case ActionType::TikTokDrag:
-                tiktok_drag_down();
-                break;
             case ActionType::MouseCenter:
                 if (_ble_mouse_on) {
                     GetHAL().bleMouseCenterCursor();
@@ -182,6 +179,9 @@ void AppBleHid::onRunning()
     _ble_mouse_on = GetHAL().bleMouseIsInited();
     const bool kb_connected = _ble_keyboard_on && GetHAL().bleKeyboardIsConnected();
     const bool mouse_connected = _ble_mouse_on && GetHAL().bleMouseIsConnected();
+    if (mouse_connected && !_last_mouse_connected && _screen == ScreenType::TikTok) {
+        position_mouse_for_android();
+    }
     if (kb_connected != _last_kb_connected || mouse_connected != _last_mouse_connected) {
         _last_kb_connected = kb_connected;
         _last_mouse_connected = mouse_connected;
@@ -261,6 +261,7 @@ void AppBleHid::handle_key_event(const Keyboard::KeyEvent_t& keyEvent)
                     break;
                 case 3:
                     _screen = ScreenType::TikTok;
+                    _pending_action = ActionType::AutoStartKeyboard;
                     break;
                 default:
                     break;
@@ -339,9 +340,27 @@ void AppBleHid::handle_key_event(const Keyboard::KeyEvent_t& keyEvent)
             break;
         case ScreenType::TikTok:
             if (keyEvent.keyCode == KEY_1) {
-                _pending_action = ActionType::ToggleMouse;
+                _pending_action = ActionType::ToggleKeyboard;
             } else if (keyEvent.keyCode == KEY_2) {
-                _pending_action = ActionType::TikTokDrag;
+                _pending_action = ActionType::StartAdvertising;
+            } else if (keyEvent.keyCode == KEY_3) {
+                _pending_action = ActionType::ClearBonding;
+            } else if (keyEvent.keyCode == KEY_4) {
+                bool next = !GetHAL().bleKeyboardGetAutoAdvertise();
+                GetHAL().bleKeyboardSetAutoAdvertise(next);
+                set_status(next ? "Auto adv on" : "Auto adv off");
+            } else if (keyEvent.keyCode == KEY_5) {
+                _pending_action = ActionType::KickClient;
+            } else if (keyEvent.keyCode == KEY_6) {
+                _pending_action = ActionType::SwitchProfile1;
+            } else if (keyEvent.keyCode == KEY_7) {
+                _pending_action = ActionType::SwitchProfile2;
+            } else if (keyEvent.keyCode == KEY_8) {
+                _pending_action = ActionType::SwitchProfile3;
+            } else if (keyEvent.keyCode == KEY_9) {
+                _pending_action = ActionType::SwitchProfile4;
+            } else if (keyEvent.keyCode == KEY_0) {
+                _pending_action = ActionType::SwitchProfile5;
             }
             break;
         case ScreenType::Main:
@@ -387,6 +406,7 @@ void AppBleHid::handle_key_event_raw(const Keyboard::KeyEventRaw_t& keyEvent)
                     break;
                 case 3:
                     _screen = ScreenType::TikTok;
+                    _pending_action = ActionType::AutoStartKeyboard;
                     break;
                 default:
                     break;
@@ -554,17 +574,27 @@ void AppBleHid::render_tiktok()
     GetHAL().canvas.setTextSize(1);
     GetHAL().canvas.setTextColor(TFT_ORANGE, THEME_COLOR_BG);
     GetHAL().canvas.setCursor(0, 0);
-    GetHAL().canvas.println("TikTok");
+    GetHAL().canvas.printf("TikTok - Profile %d", _current_profile + 1);
+
+    const bool kb_connected = _ble_keyboard_on && GetHAL().bleKeyboardIsConnected();
+    GetHAL().canvas.setTextColor(TFT_WHITE, THEME_COLOR_BG);
+    GetHAL().canvas.setCursor(0, 12);
+    GetHAL().canvas.printf("%s  Conn: %s",
+                           _ble_keyboard_on ? "On" : "Off",
+                           kb_connected ? "Yes" : "No");
 
     GetHAL().canvas.setTextColor(TFT_LIGHTGREY, THEME_COLOR_BG);
-    GetHAL().canvas.setCursor(0, 16);
-    GetHAL().canvas.print("Fn+1 Toggle mouse");
-    GetHAL().canvas.setCursor(0, 32);
-    GetHAL().canvas.print("Fn+2 Drag down");
+    GetHAL().canvas.setCursor(0, 28);
+    GetHAL().canvas.print("Fn+1 On/Off  Fn+2 Adv  Fn+3 Clear");
+    GetHAL().canvas.setCursor(0, 44);
+    GetHAL().canvas.print("Fn+4 AutoAdv  Fn+5 Disconnect");
+    GetHAL().canvas.setCursor(0, 60);
+    GetHAL().canvas.setTextColor(TFT_CYAN, THEME_COLOR_BG);
+    GetHAL().canvas.print("Fn+6..0 = Profile 1..5");
 
     if (!_status.empty()) {
         GetHAL().canvas.setTextColor(TFT_GREEN, THEME_COLOR_BG);
-        GetHAL().canvas.setCursor(0, 64);
+        GetHAL().canvas.setCursor(0, 96);
         GetHAL().canvas.print(_status.c_str());
     }
 }
@@ -632,20 +662,17 @@ void AppBleHid::media_tap(uint16_t usage_id)
     set_status("Media key sent");
 }
 
-void AppBleHid::tiktok_drag_down()
+void AppBleHid::position_mouse_for_android()
 {
     if (!_ble_mouse_on || !GetHAL().bleMouseIsConnected()) {
-        set_status("Mouse not connected");
         return;
     }
 
-    GetHAL().bleMousePress(kMouseButtonLeft);
-    for (int i = 0; i < 12; ++i) {
-        GetHAL().bleMouseMove(0, 8);
-        GetHAL().delay(12);
-    }
-    GetHAL().bleMouseRelease(kMouseButtonLeft);
-    set_status("TikTok drag");
+    GetHAL().bleMouseMove(-9999, -9999);
+    GetHAL().delay(30);
+    GetHAL().bleMouseMove(0, 200);
+    GetHAL().delay(20);
+    GetHAL().bleMouseMove(100, 0);
 }
 
 void AppBleHid::generate_profile_address(int profile, uint8_t* addr)
@@ -714,8 +741,8 @@ void AppBleHid::switch_profile(int profile)
         return;
     }
     
-    // For Mouse screen, just update profile (mouse doesn't have profile addresses yet)
-    if (_screen == ScreenType::Mouse) {
+    // For Mouse/TikTok screen, just update profile (mouse doesn't have profile addresses yet)
+    if (_screen == ScreenType::Mouse || _screen == ScreenType::TikTok) {
         _current_profile = profile;
         GetHAL().getSettings().SetInt("ble_profile", profile);
         set_status("Profile " + std::to_string(profile + 1) + " selected");

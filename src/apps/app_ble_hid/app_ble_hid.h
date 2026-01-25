@@ -28,7 +28,6 @@ private:
         MediaPlayPause,
         MediaPrev,
         MediaNext,
-        TikTokDrag,
         MouseCenter,
         KickClient,
         AutoStartKeyboard,
@@ -61,7 +60,7 @@ private:
     void toggle_ble_keyboard();
     void toggle_ble_mouse();
     void media_tap(uint16_t usage_id);
-    void tiktok_drag_down();
+    void position_mouse_for_android();
     void switch_profile(int profile);
     void load_current_profile();
     void generate_profile_address(int profile, uint8_t* addr);

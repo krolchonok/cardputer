@@ -391,9 +391,10 @@ void ble_keyboard_wrapper_deinit(void) {
     // Release all keys before deinit
     ble_keyboard_wrapper_release_all();
 
-    // Give BLE stack time to quiesce before deinit
+    // Give BLE stack time to quiesce before deinit.
+    // Use release_memory=false to allow reliable re-init later.
     vTaskDelay(pdMS_TO_TICKS(120));
-    BLEDevice::deinit(true);
+    BLEDevice::deinit(false);
     vTaskDelay(pdMS_TO_TICKS(120));
     
     hid = nullptr;

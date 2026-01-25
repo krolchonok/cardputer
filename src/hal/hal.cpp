@@ -1532,7 +1532,8 @@ void Hal::bleMouseDeinit() {
     bleMouse->end();
     delete bleMouse;
     bleMouse = nullptr;
-    BLEDevice::deinit(true);
+    // Use release_memory=false to allow reliable re-init later.
+    BLEDevice::deinit(false);
     m5gfx::delay(120);
     _is_ble_mouse_inited = false;
     mclog::tagInfo(_tag, "BLE Mouse deinitialized");
